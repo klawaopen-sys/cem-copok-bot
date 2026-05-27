@@ -102,3 +102,56 @@ def get_btc_levels(btc_price):
     support2 = round(btc_price * 0.975, -2)
     resist = round(btc_price * 1.015, -2)
     return f"{int(support1):,} / {int(support2):,}", f"{int(resist):,}"
+
+def get_gemini_trader_advice(crypto, forex, market):
+    """Генерує розумну пораду трейдеру за допомогою Google Gemini API"""
+    if not config.GEMINI_API_KEY:
+        return "Контролюйте ризики, ринок волатильний."
+        
+    try:
+        btc_price = crypto.get('BTC', {}).get('price') if crypto and 'BTC' in crypto else None
+        btc_change = crypto.get('BTC', {}).get('change') if crypto and 'BTC' in crypto else 0
+        usd_uah = forex.get('USD/UAH') if forex else None
+        sp500 = market.get('SP500') if market else None
+        gold = market.get('GOLD') if market else None
+        brent = market.get('BRENT') if market else None
+        
+        prompt = (
+            "Ти — професійний фінансовий аналітик та досвідчений крипто-трейдер. "
+            "На основі наступних ринкових даних напиши коротку, корисну та реалістичную пораду для трейдерів на сьогодні (1-2 речення українською мовою). "
+            "Порада має бути конкретною, практичною, без банальностей типу 'ринок волатильний' чи 'контролюйте ризики'. "
+            "Вона повинна спиратися на поточні рухи цін:\n"
+            f"- Ціна BTC: {f'${btc_price:,.2f}' if btc_price else '—'} (зміна за 24г: {btc_change:+.2f}%)\n"
+            f"- Курс USD/UAH (НБУ): {f'₴{usd_uah}' if usd_uah else '—'}\n"
+            f"- Індекс S&P 500: {sp500 if sp500 else '—'}\n"
+            f"- Золото: {f'${gold}' if gold else '—'}\n"
+            f"- Нафта Brent: {f'${brent}' if brent else '—'}\n\n"
+            "Напиши тільки сам текст поради, без будь-яких вступних слів, лапок чи привітань. Порада має починатися одразу з суті."
+        )
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "contents": [{
+                "parts": [{
+                    "text": prompt
+                }]
+            }]
+        }
+        
+        r = requests.post(url, headers=headers, json=payload, timeout=15)
+        if r.status_code == 200:
+            data = r.json()
+            advice = data['candidates'][0]['content']['parts'][0]['text'].strip()
+            # Clean up potential leading/trailing quotes
+            if advice.startswith('"') and advice.endswith('"'):
+                advice = advice[1:-1]
+            if advice.startswith('«') and advice.endswith('»'):
+                advice = advice[1:-1]
+            return advice
+        else:
+            print(f"Помилка Gemini API: HTTP {r.status_code}, {r.text}")
+    except Exception as e:
+        print(f"Помилка генерації поради Gemini: {e}")
+        
+    return "Контролюйте ризики, ринок волатильний."

@@ -16,6 +16,9 @@ API_HASH = '65354c57d6e3f7691120cf1e55b46fdc'
 # Настройки CoinMarketCap (для парсинга цен и новостей)
 CMC_API_KEY = 'eb3f0248df7946f681f7577a96fd85b7'
 
+# Настройки Gemini API (для умных советов трейдера)
+GEMINI_API_KEY = 'AIzaSyDA7jVvIIh-2KRX6hYteGfkfIWzB-Fxlzc'
+
 # Расписание
 MORNING_POST_TIME = '07:40'
 TIMEZONE = 'Europe/Kyiv'

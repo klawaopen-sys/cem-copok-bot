@@ -3,7 +3,7 @@ from aiogram import Bot
 import config
 from crypto_parser import (
     get_crypto_prices, get_forex_rates, get_market_data,
-    get_cmc_news, get_btc_levels
+    get_cmc_news, get_btc_levels, get_gemini_trader_advice
 )
 from datetime import datetime
 import pytz
@@ -49,6 +49,8 @@ def build_morning_post(crypto, forex, market, news_text):
         em = "🟢" if ch > 0 else "🔴"
         return f"- {label}: ${p:,.2f} ({em} {ch:+.2f}%)"
 
+    advice = get_gemini_trader_advice(crypto, forex, market)
+
     post = (
         f"🌅 <b>Ранковий фінансовий огляд — {day_str}</b>\n\n"
         f"{mood}\n\n"
@@ -74,7 +76,7 @@ def build_morning_post(crypto, forex, market, news_text):
         f"- Підтримка: {support or '—'}\n"
         f"- Опір: {resist or '—'}\n\n"
         f"💡 <b>Порада трейдеру:</b>\n"
-        f"Контролюйте ризики, ринок волатильний.\n\n"
+        f"{advice}\n\n"
         f"#Крипта #Трейдинг #Фінанси"
     )
     return post
