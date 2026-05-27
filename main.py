@@ -12,13 +12,13 @@ def noon_job():
     print("⏰ Час 12:00! Запускаю денний огляд новин...")
     run_news_poster()
 
-# Запуск каждый день по Киеву
-schedule.every().day.at(config.MORNING_POST_TIME).do(morning_job)
-schedule.every().day.at("12:00").do(noon_job)
+# Запуск каждый день по Киеву (з явним вказанням часового поясу Europe/Kyiv)
+schedule.every().day.at(config.MORNING_POST_TIME, "Europe/Kyiv").do(morning_job)
+schedule.every().day.at("12:00", "Europe/Kyiv").do(noon_job)
 
-# Тимчасові тестові запуски для перевірки роботи в хмарі (сьогодні о 16:00 та 16:15)
-schedule.every().day.at("16:00").do(morning_job)
-schedule.every().day.at("16:15").do(noon_job)
+# Тимчасові тестові запуски для перевірки роботи в хмарі (сьогодні о 18:40 та 18:45 за Києвом)
+schedule.every().day.at("18:40", "Europe/Kyiv").do(morning_job)
+schedule.every().day.at("18:45", "Europe/Kyiv").do(noon_job)
 
 if __name__ == "__main__":
     print("=" * 45)
