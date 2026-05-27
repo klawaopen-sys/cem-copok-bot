@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "klava-assistant-496912",
+  "private_key_id": "07d33b4192535e2bb04952cedca4c9c98e7635a8",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDO+5d63JrROZfl\nK2w4ZAdEtJMPSuVx7u7PDJGtnjFF07UIrUQOocJRoXIOp2TL4261SJ9UMCaDRWl7\nXZKIcQnoKpT3Lm9TE1EZxkqTmdy1C6GdFN+j7B+jInLR+T2/l+sBPnmGeMuLQcVl\nMg4PDXJaeKdiEFTNHRe/cnyFrZloVMvJPZKOoA6PtxECHfqZDHOVG24tRHQP2RUO\nCvPg2iQVTMXeJA1ehfND+0qrV9EbwzorrSCNlGYONujNxw5GA5K7eJyoL6UAo9+o\nduBC+fl0Frr8JY59df2gGm49Uy+X4R4RneVIBRsoQKxj5JBPXdOR3fJ9ud4Nw5Jp\nI/8pSnw5AgMBAAECggEAG57cSINuz3PBjs3cG6xRgfwc0cIbWzhYut2BBSuihKBr\nPJSui8tPPIhwSX9SBpk7eUqPJHNmeEcHe/RxLO70tPwVs+SI64uc23UoF4lFOA2s\ny+LwsxW75Q+gRd/eOxaBQEG/gs/UzakBt+7VjHGtbGBEaeQnBNYYiK406rvPSGom\nyBEpcQ3KOPgsTOVyzY0HM76hW+37vtj1ZjoDjpKsDFPQ+VFJ25FbRqeiyQAhO7y/\nRXuoJSyUScjz15fgGKgVY18K2rzOu//xgaWBphogZVLDnMmusa7Ewt7y/3Y4IS//\nBMBvUIwpr9U2u8sDU+vOSW03b1FQI7UXN8mQ/ChI+QKBgQD4ecg7eBDmNQiYUjgR\njl/42nHEWIerzhXiylpJgJ7UxmJPC6S9yK7iJbtkczqdreWyPjVQIGIfVpJYhPXk\n4/xVEhHDbhngJhdb3b0k8RD8j5p5+BwDIOjUCubQCDo23LQJvuJxV0ssrU+SGceo\nXPG8Z4h5ITjLnl02pDeUmtnIfQKBgQDVQCaRhhRaSPXUQ103zG5t+R6wy8jlVEGs\nneUZLup8V/NH6N5DxzdNxRMOWO5BjpAe0a0ZtuWvx3yWtVZb9t9Es/iWlJ6DzUiL\naif6D84wcTxthcrUSFNOvWLd/n+gY/D2gI8pgGyWajr0Wj/TAS+m5lHgrTNMCtBX\nNNKiU/nLbQKBgB8tMJl9nCk2WEi8cDqLsbEIv6OSNBuzdP2KxD9auxMZfTZL0LTb\nXE4Vy+hzqNQmAJ8XvRq7pXQnKZ+ftzasAHowFTh/NRHx1ZZ6QQRElwwJfKl3HxSp\naW1JnOJXVe6STKi4YbM078LAUC6Vu359gvtPxkjkiTrLOQjlG/AyaccFAoGAMSdC\nPJTNKCpdD3ofiHcElTCw1EuEmOec467ZWb6oqdST7OVOJg1LQA/G3q287TtxGMl3\nvs+bjbLLkullaHk06V8aU4saJoMwz4G+iTMPcbcIGK6YG+o32ZRpr4Wz4UJoDkl/\nti812E3QHPaYc4h4dV3tTX5ero5ni1JPor78etkCgYEAt5UbDvDA+bU5gT1ivVbI\nqRYoyjYctJXHwpgYvjzJ2pZVggl5zK82UjRYVdmGqgKPBU+AhQv3zD/c8sAlOQaR\nSHeJvyI8zsrBp5qlt0ooh7Iu0oYc1owv6r1Tcv+txx66s4y5P1kuI98+1LWNYto/\nbTGcYZ+uVhNxrBoAkdQynMY=\n-----END PRIVATE KEY-----\n",
+  "client_email": "cem-copok@klava-assistant-496912.iam.gserviceaccount.com",
+  "client_id": "104939708689534610338",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/cem-copok%40klava-assistant-496912.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
