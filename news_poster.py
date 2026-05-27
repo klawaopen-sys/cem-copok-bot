@@ -152,8 +152,8 @@ async def post_news_report(client):
                                 new_data.append((item[0], item[1], item[2], int(item[3] * 0.8)))
                         logo.putdata(new_data)
                         
-                        # Зменшуємо логотип до 25% ширини фото
-                        logo_width = int(main_img.width * 0.25)
+                        # Зменшуємо логотип до 12.5% ширини фото (вдвічі менше)
+                        logo_width = int(main_img.width * 0.125)
                         aspect_ratio = logo.height / logo.width
                         logo_height = int(logo_width * aspect_ratio)
                         logo = logo.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
