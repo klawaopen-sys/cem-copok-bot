@@ -235,37 +235,21 @@ async def post_morning_report():
         print("🚀 Публікую пост у канал...")
         message_id = None
         
-        # Try sending using Telegram file_id first
-        if telegram_file_id and telegram_file_id.strip() and not telegram_file_id.startswith('-'):
+        local_img = 'morning_default.png'
+        if os.path.exists(local_img):
             try:
-                print(f"📤 Спроба відправки через Telegram file_id: {telegram_file_id[:15]}...")
+                print(f"📤 Відправляю локальну картинку: {local_img}...")
                 msg = await bot.send_photo(
                     chat_id=config.TARGET_CHANNEL,
-                    photo=telegram_file_id.strip(),
+                    photo=FSInputFile(local_img),
                     caption=post_text,
                     parse_mode='HTML'
                 )
                 message_id = msg.message_id
-                print("✅ Успішно надіслано за допомогою Telegram file_id!")
+                print("✅ Успішно надіслано!")
             except Exception as e:
-                print(f"⚠️ Спроба відправки через file_id не вдалася: {e}. Переходжу до завантаження з Google Диску...")
-        
-        # Fallback to Google Drive download if file_id failed or was not provided
-        if not message_id:
-            if download_image_by_drive_id(drive_file_id):
-                if os.path.exists('photo.jpg'):
-                    try:
-                        msg = await bot.send_photo(
-                            chat_id=config.TARGET_CHANNEL,
-                            photo=FSInputFile('photo.jpg'),
-                            caption=post_text,
-                            parse_mode='HTML'
-                        )
-                        message_id = msg.message_id
-                        print("✅ Успішно надіслано локальну картинку!")
-                    except Exception as e:
-                        print(f"⚠️ Не вдалося відправити локальну картинку: {e}")
-            
+                print(f"⚠️ Не вдалося відправити картинку: {e}")
+                
         # Hard fallback to text-only if everything else fails
         if not message_id:
             print("⚠️ Відправляю пост як звичайний текст...")
