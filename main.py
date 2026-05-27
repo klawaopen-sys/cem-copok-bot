@@ -16,6 +16,10 @@ def noon_job():
 schedule.every().day.at(config.MORNING_POST_TIME).do(morning_job)
 schedule.every().day.at("12:00").do(noon_job)
 
+# Тимчасові тестові запуски для перевірки роботи в хмарі (сьогодні о 16:00 та 16:15)
+schedule.every().day.at("16:00").do(morning_job)
+schedule.every().day.at("16:15").do(noon_job)
+
 if __name__ == "__main__":
     print("=" * 45)
     print("   🤖 КРИПТО-БОТ ЗАПУЩЕНО")
