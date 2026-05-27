@@ -103,21 +103,12 @@ def select_and_rewrite_news_with_gemini(news_items):
         
     return None, None
 
-async def post_news_report():
+async def post_news_report(client):
     print("🚀 Початок процесу денної публікації новин...")
     
-    # 1. Проверяем наличие сессии telethon
-    if not os.path.exists("klava.session"):
-        print("❌ Помилка: Файл сесії 'klava.session' не знайдено! Перенесіть його в папку бота.")
-        return
-        
-    # 2. Инициализируем юзербота Telethon (работает в текущей папке)
-    client = TelegramClient('klava', config.API_ID, config.API_HASH)
     bot = Bot(token=config.BOT_TOKEN)
     
     try:
-        await client.start()
-        
         # 3. Собираем новости
         news_items = await get_latest_news_texts(client)
         if not news_items:
@@ -170,11 +161,21 @@ async def post_news_report():
         print(f"❌ Помилка в процесі публікації новин: {e}")
         import traceback; traceback.print_exc()
     finally:
-        await client.disconnect()
         await bot.session.close()
 
-def run_news_poster():
-    asyncio.run(post_news_report())
+def run_news_poster(client, loop):
+    """Виконує функцію в існуючому event loop головного потоку"""
+    asyncio.run_coroutine_threadsafe(post_news_report(client), loop)
 
 if __name__ == "__main__":
-    run_news_poster()
+    # Локальний тест (тільки якщо запускати цей файл напряму)
+    import os
+    from telethon import TelegramClient
+    
+    async def local_test():
+        test_client = TelegramClient('klava', config.API_ID, config.API_HASH)
+        await test_client.start()
+        await post_news_report(test_client)
+        await test_client.disconnect()
+        
+    asyncio.run(local_test())
