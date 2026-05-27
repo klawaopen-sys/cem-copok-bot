@@ -23,7 +23,7 @@ GEMINI_API_KEY = 'AIzaSyDA7jVvIIh-2KRX6hYteGfkfIWzB-Fxlzc'
 REFERRAL_LINKS = {
     "Binance": "https://www.binance.com/referral/earn-together/refer2earn-usdc/claim?hl=ru-UA&ref=GRO_28502_BR8TC&utm_source=referral_entrance",
     "TradingView": "https://www.tradingview.com/pricing/?share_your_love=GLove_",
-    "Bybit": "",
+    "Bybit": "https://www.bybit.com/invite?ref=N8DGMD&medium=referral&utm_campaign=evergreen&share_to=link",
     "CoinMarketCap": ""
 }
 
