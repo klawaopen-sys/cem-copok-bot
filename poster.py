@@ -3,7 +3,8 @@ from aiogram import Bot
 import config
 from crypto_parser import (
     get_crypto_prices, get_forex_rates, get_market_data,
-    get_cmc_news, get_btc_levels, get_gemini_trader_advice
+    get_cmc_news, get_btc_levels, get_gemini_trader_advice,
+    apply_referral_links
 )
 from datetime import datetime
 import pytz
@@ -228,6 +229,7 @@ async def post_morning_report():
 
         # 3. Build post text
         post_text = build_morning_post(crypto, forex, market, news)
+        post_text = apply_referral_links(post_text)
 
         # 4. Publish to Telegram
         print("🚀 Публікую пост у канал...")

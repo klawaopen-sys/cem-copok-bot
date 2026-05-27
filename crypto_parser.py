@@ -155,3 +155,27 @@ def get_gemini_trader_advice(crypto, forex, market):
         print(f"Помилка генерації поради Gemini: {e}")
         
     return "Контролюйте ризики, ринок волатильний."
+
+def apply_referral_links(text):
+    """Шукає згадки Bybit, Binance, TradingView тощо та перетворює їх на реферальні посилання"""
+    import re
+    if not hasattr(config, 'REFERRAL_LINKS'):
+        return text
+        
+    for name, url in config.REFERRAL_LINKS.items():
+        if url and url.strip():
+            # Шукаємо збіг цілого слова з ігноруванням регістру
+            pattern = re.compile(rf'\b{re.escape(name)}\b', re.IGNORECASE)
+            
+            def replace_func(match):
+                start = match.start()
+                # Перевіряємо, чи це не частина URL-адреси (щоб не зламати посилання)
+                preceding_text = text[max(0, start-20):start]
+                if "http" in preceding_text or "www" in preceding_text or "/" in preceding_text:
+                    return match.group(0)
+                
+                matched_word = match.group(0)
+                return f'<a href="{url}"><b>{matched_word}</b></a>'
+                
+            text = pattern.sub(replace_func, text)
+    return text

@@ -19,6 +19,14 @@ CMC_API_KEY = 'eb3f0248df7946f681f7577a96fd85b7'
 # Настройки Gemini API (для умных советов трейдера)
 GEMINI_API_KEY = 'AIzaSyDA7jVvIIh-2KRX6hYteGfkfIWzB-Fxlzc'
 
+# Реферальные ссылки (автоматически заменяются в постах на кликабельные)
+REFERRAL_LINKS = {
+    "Binance": "https://www.binance.com/referral/earn-together/refer2earn-usdc/claim?hl=ru-UA&ref=GRO_28502_BR8TC&utm_source=referral_entrance",
+    "TradingView": "https://www.tradingview.com/pricing/?share_your_love=GLove_",
+    "Bybit": "",
+    "CoinMarketCap": ""
+}
+
 # Расписание
 MORNING_POST_TIME = '07:40'
 TIMEZONE = 'Europe/Kyiv'

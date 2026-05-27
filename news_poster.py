@@ -7,6 +7,7 @@ from aiogram.types import FSInputFile
 import config
 import pytz
 from datetime import datetime
+from crypto_parser import apply_referral_links
 
 # Список каналов-доноров
 CHANNELS = ["cointelegraph", "Coin_Post", "money"]
@@ -128,6 +129,8 @@ async def post_news_report():
         if not post_text:
             print("❌ Не вдалося згенерувати текст поста через Gemini.")
             return
+        
+        post_text = apply_referral_links(post_text)
             
         # 5. Скачиваем медиа с помощью Telethon, если оно есть у выбранного кандидата
         photo_path = None
