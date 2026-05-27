@@ -1,7 +1,7 @@
 import asyncio
 import os
 import requests
-from pyrogram import Client
+from telethon import TelegramClient
 from aiogram import Bot
 from aiogram.types import FSInputFile
 import config
@@ -11,16 +11,16 @@ from datetime import datetime
 # Список каналов-доноров
 CHANNELS = ["cointelegraph", "Coin_Post", "money"]
 
-async def get_latest_news_texts(app):
-    """Собирает последние новости из каналов"""
+async def get_latest_news_texts(client):
+    """Собирает последние новости из каналов с помощью Telethon"""
     news_list = []
     print("📥 Збираю пости з каналів-донорів...")
     for channel in CHANNELS:
         try:
             print(f"📡 Зчитую канал @{channel}...")
-            # Получаем последние 5 сообщений из каждого канала
-            async for message in app.get_chat_history(channel, limit=5):
-                text = message.text or message.caption
+            # Получаем последние 3 сообщения из каждого канала
+            async for message in client.iter_messages(channel, limit=3):
+                text = message.text or message.message
                 if text and len(text.strip()) > 30:
                     news_list.append({
                         "channel": channel,
@@ -73,7 +73,7 @@ def select_and_rewrite_news_with_gemini(news_items):
             }]
         }
         
-        r = requests.post(url, headers=headers, json=payload, timeout=25)
+        r = requests.post(url, headers=headers, json=payload, timeout=45)
         if r.status_code == 200:
             data = r.json()
             response_text = data['candidates'][0]['content']['parts'][0]['text'].strip()
@@ -81,17 +81,17 @@ def select_and_rewrite_news_with_gemini(news_items):
             # Парсим INDEX
             first_line = response_text.split('\n')[0].strip()
             chosen_index = 0
-            post_content = response_text
+            post_text = response_text
             
             if "INDEX:" in first_line:
                 try:
                     chosen_index = int(first_line.replace("INDEX:", "").strip())
-                    post_content = "\n".join(response_text.split('\n')[1:]).strip()
+                    post_text = "\n".join(response_text.split('\n')[1:]).strip()
                 except Exception:
                     pass
             
             chosen_item = news_items[chosen_index] if chosen_index < len(news_items) else news_items[0]
-            return post_content, chosen_item
+            return post_text, chosen_item
         else:
             print(f"Помилка Gemini API: HTTP {r.status_code}")
     except Exception as e:
@@ -102,20 +102,20 @@ def select_and_rewrite_news_with_gemini(news_items):
 async def post_news_report():
     print("🚀 Початок процесу денної публікації новин...")
     
-    # 1. Проверяем наличие сессии pyrogram
+    # 1. Проверяем наличие сессии telethon
     if not os.path.exists("klava.session"):
-        print("❌ Помилка: Файл сесії 'klava.session' не знайдено! Авторизуйтеся локально.")
+        print("❌ Помилка: Файл сесії 'klava.session' не знайдено! Перенесіть його в папку бота.")
         return
         
-    # 2. Инициализируем юзербота pyrogram (работает в текущей папке)
-    app = Client("klava", api_id=config.API_ID, api_hash=config.API_HASH, workdir=".")
+    # 2. Инициализируем юзербота Telethon (работает в текущей папке)
+    client = TelegramClient('klava', config.API_ID, config.API_HASH)
     bot = Bot(token=config.BOT_TOKEN)
     
     try:
-        await app.start()
+        await client.start()
         
         # 3. Собираем новости
-        news_items = await get_latest_news_texts(app)
+        news_items = await get_latest_news_texts(client)
         if not news_items:
             print("⚠️ Новин для обробки не знайдено.")
             return
@@ -126,13 +126,13 @@ async def post_news_report():
             print("❌ Не вдалося згенерувати текст поста через Gemini.")
             return
             
-        # 5. Скачиваем медиа, если оно есть у выбранного кандидата
+        # 5. Скачиваем медиа с помощью Telethon, если оно есть у выбранного кандидата
         photo_path = None
         if chosen_item and chosen_item["has_photo"]:
             try:
                 print(f"📸 Завантажую картинку з обраного поста (Канал: @{chosen_item['channel']})...")
                 # Скачиваем прямо в текущую папку под именем news_photo.jpg
-                photo_path = await app.download_media(chosen_item["message_obj"], file_name="news_photo.jpg")
+                photo_path = await client.download_media(chosen_item["message_obj"], file="news_photo.jpg")
                 print(f"✅ Картинку завантажено: {photo_path}")
             except Exception as e:
                 print(f"⚠️ Не вдалося завантажити картинку з поста: {e}")
@@ -164,7 +164,7 @@ async def post_news_report():
         print(f"❌ Помилка в процесі публікації новин: {e}")
         import traceback; traceback.print_exc()
     finally:
-        await app.stop()
+        await client.disconnect()
         await bot.session.close()
 
 def run_news_poster():
