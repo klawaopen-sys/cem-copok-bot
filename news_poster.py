@@ -131,6 +131,48 @@ async def post_news_report(client):
                 # Скачиваем прямо в текущую папку под именем news_photo.jpg
                 photo_path = await client.download_media(chosen_item["message_obj"], file="news_photo.jpg")
                 print(f"✅ Картинку завантажено: {photo_path}")
+                
+                # Наложение водяного знака
+                try:
+                    from PIL import Image
+                    import os
+                    logo_file = "logo.jpg"
+                    if os.path.exists(photo_path) and os.path.exists(logo_file):
+                        print("🎨 Накладаю водяний знак на картинку...")
+                        main_img = Image.open(photo_path).convert("RGBA")
+                        logo = Image.open(logo_file).convert("RGBA")
+                        
+                        # Робимо білий фон прозорим
+                        datas = logo.getdata()
+                        new_data = []
+                        for item in datas:
+                            if item[0] > 220 and item[1] > 220 and item[2] > 220:
+                                new_data.append((255, 255, 255, 0))
+                            else:
+                                new_data.append((item[0], item[1], item[2], int(item[3] * 0.8)))
+                        logo.putdata(new_data)
+                        
+                        # Зменшуємо логотип до 25% ширини фото
+                        logo_width = int(main_img.width * 0.25)
+                        aspect_ratio = logo.height / logo.width
+                        logo_height = int(logo_width * aspect_ratio)
+                        logo = logo.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
+                        
+                        # Відступи внизу праворуч
+                        padding = int(main_img.width * 0.03)
+                        position = (main_img.width - logo_width - padding, main_img.height - logo_height - padding)
+                        
+                        transparent = Image.new('RGBA', main_img.size, (0,0,0,0))
+                        transparent.paste(logo, position)
+                        
+                        result = Image.alpha_composite(main_img, transparent)
+                        
+                        # Зберігаємо назад як JPG
+                        result.convert("RGB").save(photo_path, "JPEG")
+                        print("✅ Водяний знак успішно накладено!")
+                except Exception as ex:
+                    print(f"⚠️ Не вдалося накласти водяний знак: {ex}")
+                    
             except Exception as e:
                 print(f"⚠️ Не вдалося завантажити картинку з поста: {e}")
 
