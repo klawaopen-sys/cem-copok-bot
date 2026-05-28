@@ -4,7 +4,8 @@ from telethon import events
 import asyncio
 import random
 
-TARGET_CHANNELS = ['doubletop', 'Binance_UA_official']
+# Завантажуємо список каналів з конфігурації
+TARGET_CHANNELS = getattr(config, 'COMMENT_CHANNELS', ['doubletop', 'Binance_UA_official'])
 
 def get_gemini_comment(post_text):
     if not config.GEMINI_API_KEY:
@@ -43,27 +44,45 @@ def get_gemini_comment(post_text):
 def register_commenter(client):
     """Реєструє обробник подій для автокомментування"""
     
+    print(f"📡 Автокоментатор налаштовано для каналів: {TARGET_CHANNELS}")
+    
     @client.on(events.NewMessage(chats=TARGET_CHANNELS))
     async def handler(event):
         try:
+            # Отримуємо назву каналу
             chat = await event.get_chat()
             channel_name = chat.username if chat.username else str(chat.id)
-            print(f"[{event.date}] Новий пост у каналі @{channel_name}! Генерую коментар...")
             
             post_text = event.raw_text
+            
+            # Пропускаємо порожні або занадто короткі повідомлення (опитування, стікери, картини без тексту)
+            if not post_text or len(post_text.strip()) < 15:
+                print(f"⏭️ [@{channel_name}] Пост занадто короткий або порожній. Пропускаю.")
+                return
+                
+            print(f"📝 [{event.date}] Новий пост у каналі @{channel_name}! Генерую розумний коментар...")
             
             # Виконуємо синхронний запит до Gemini у фоновому потоці, щоб не блокувати Telethon
             loop = asyncio.get_event_loop()
             comment = await loop.run_in_executor(None, get_gemini_comment, post_text)
             
+            if not comment:
+                print("⚠️ Не вдалося згенерувати коментар через Gemini.")
+                return
+                
             # Імітуємо поведінку людини: затримка на читання та друкування (від 15 до 45 секунд)
             delay = random.uniform(15.0, 45.0)
-            print(f"⏳ Очікую {delay:.1f} сек для природності перед відправкою...")
+            print(f"⏳ [@{channel_name}] Очікую {delay:.1f} сек для природності перед відправкою...")
             await asyncio.sleep(delay)
             
-            # Telethon автоматично знайде прив'язану групу обговорення і відправить туди коментар
-            await client.send_message(entity=event.chat_id, message=comment, comment_to=event.message)
-            print(f"✅ Коментар успішно залишено: {comment}")
+            # Відправляємо коментар
+            try:
+                await client.send_message(entity=event.chat_id, message=comment, comment_to=event.message)
+                print(f"✅ [@{channel_name}] Коментар успішно опубліковано: {comment}")
+            except Exception as send_err:
+                print(f"❌ [@{channel_name}] Помилка при відправці коментаря: {send_err}")
+                print(f"👉 ПІДКАЗКА: Переконайтеся, що ваш юзербот вступив у чат обговорення (group/chat) для каналу @{channel_name}!")
             
         except Exception as e:
-            print(f"❌ Не вдалося залишити коментар: {e}")
+            print(f"❌ Не вдалося обробити новий пост: {e}")
+

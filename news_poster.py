@@ -9,8 +9,9 @@ import pytz
 from datetime import datetime
 from crypto_parser import apply_referral_links
 
-# Список каналов-доноров
-CHANNELS = ["cointelegraph", "Coin_Post", "money"]
+# Список каналов-доноров з конфігурації
+CHANNELS = getattr(config, 'NEWS_DONOR_CHANNELS', ["cointelegraph", "Coin_Post", "money"])
+
 
 async def get_latest_news_texts(client):
     """Собирает последние новости из каналов с помощью Telethon"""
@@ -59,7 +60,7 @@ def select_and_rewrite_news_with_gemini(news_items):
         "1. Обери ОДНУ найважливішу, найцікавішу та найактуальнішу новину (або об'єднай дві коротких, якщо вони пов'язані).\n"
         "   - ВАЖЛИВО: Надавай високий пріоритет кандидатам, у яких 'Має картинку: ТАК', щоб пост вийшов з красивим зображенням!\n"
         "2. Напиши професійний, захоплюючий рерайт цієї новини українською мовою.\n"
-        "3. Пост має бути лаконічним (до 800-1000 символів), чітко структурованим (використовуй абзаци, списки) та містити відповідні емодзі. Не роби текст надто довгим!\n"
+        "3. Пост має бути лаконічним, чітким і СТРОГО до 600-650 символів (разом із пробілами), структурованим (використовуй абзаци, емодзі). Не пиши занадто розлогих текстів! Це критично важливо, оскільки ліміт підпису до фотографії в Telegram становить 1024 символи, а частина ліміту піде на реферальні посилання та хештеги.\n"
         "4. ВАЖЛИВО: Використовуй ТІЛЬКИ HTML-теги для виділення жирного тексту: <b>текст</b> та </b>. НІКОЛИ не використовуй маркдаун зі зірочками (типу **текст** або *текст*), оскільки в нашому каналі увімкнено HTML-парсер, і зірочки відображаються як звичайний текст, що виглядає негарно!\n"
         "5. В кінці поста додай тематичні хештеги.\n"
         "6. Золоте правило: у НАЙПЕРШОМУ рядку своєї відповіді напиши ТІЛЬКИ індекс обраного кандидата у форматі 'INDEX: X' (наприклад, 'INDEX: 3'), а далі з нового рядка пиши текст самого поста. Це критично важливо для вибору правильної картинки!\n\n"
@@ -179,12 +180,28 @@ async def post_news_report(client):
         # 6. Публикуем в Telegram-канал
         print("📤 Надсилаю денну новину в канал...")
         if photo_path and os.path.exists(photo_path):
-            await bot.send_photo(
-                chat_id=config.TARGET_CHANNEL,
-                photo=FSInputFile(photo_path),
-                caption=post_text,
-                parse_mode='HTML'
-            )
+            # Перевіряємо довжину тексту для підпису до фотографії (ліміт Telegram = 1024 символи)
+            if len(post_text) <= 1024:
+                print("📸 Надсилаю як єдине повідомлення (фото + опис)...")
+                await bot.send_photo(
+                    chat_id=config.TARGET_CHANNEL,
+                    photo=FSInputFile(photo_path),
+                    caption=post_text,
+                    parse_mode='HTML'
+                )
+            else:
+                print(f"⚠️ Текст занадто довгий ({len(post_text)} симв.). Надсилаю фото окремо, а текст — відповіддю.")
+                msg_photo = await bot.send_photo(
+                    chat_id=config.TARGET_CHANNEL,
+                    photo=FSInputFile(photo_path)
+                )
+                await bot.send_message(
+                    chat_id=config.TARGET_CHANNEL,
+                    text=post_text,
+                    parse_mode='HTML',
+                    reply_to_message_id=msg_photo.message_id
+                )
+            
             # Удаляем временную картинку
             try:
                 os.remove(photo_path)

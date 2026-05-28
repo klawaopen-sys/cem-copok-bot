@@ -30,3 +30,17 @@ REFERRAL_LINKS = {
 # Расписание
 MORNING_POST_TIME = '07:40'
 TIMEZONE = 'Europe/Kyiv'
+
+# Каналы-доноры для дневного обзора новостей (12:00)
+NEWS_DONOR_CHANNELS = ["cointelegraph", "Coin_Post", "money"]
+
+# Список каналов для автокомментирования (умные комментарии через Gemini)
+COMMENT_CHANNELS = [
+    'doubletop',
+    'Binance_UA_official',
+    'incrypted',
+    'kryptodohidua',
+    'Insider_krypto',
+    'Coin_Post'
+]
+
