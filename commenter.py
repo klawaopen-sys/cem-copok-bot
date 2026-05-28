@@ -41,11 +41,46 @@ def get_gemini_comment(post_text):
         print(f"Помилка генерації коментаря: {e}")
     return "Цікаво, подивимось що з цього вийде! 👀"
 
+async def send_safe_reaction(client, chat_id, message_id, emoticon=None):
+    """Безпечно надсилає реакцію на повідомлення, ігноруючи помилки обмежень каналу"""
+    if not emoticon:
+        emoticon = random.choice(['👍', '🔥', '❤️', '🚀', '👏', '🤩'])
+    try:
+        from telethon.tl.functions.messages import SendReactionRequest
+        from telethon.tl.types import ReactionEmoji
+        
+        await client(SendReactionRequest(
+            peer=chat_id,
+            msg_id=message_id,
+            reaction=[ReactionEmoji(emoticon=emoticon)]
+        ))
+        print(f"✅ Реакцію '{emoticon}' успішно встановлено на повідомлення {message_id}!")
+        return True
+    except Exception as e:
+        print(f"⚠️ Не вдалося встановити реакцію '{emoticon}': {e}")
+        return False
+
 def register_commenter(client):
-    """Реєструє обробник подій для автокомментування"""
+    """Реєструє обробники подій для автокомментування та автореакцій"""
     
     print(f"📡 Автокоментатор налаштовано для каналів: {TARGET_CHANNELS}")
     
+    # 1. Реакції на нові пости у нашому власному каналі (@cem_copok)
+    @client.on(events.NewMessage(chats=[config.TARGET_CHANNEL]))
+    async def own_channel_handler(event):
+        try:
+            print(f"🔔 Новий пост у нашому каналі {config.TARGET_CHANNEL}! Готуюсь поставити лайк...")
+            # Імітуємо перегляд поста людиною (затримка від 5 до 15 секунд)
+            delay = random.uniform(5.0, 15.0)
+            await asyncio.sleep(delay)
+            
+            # Вибираємо випадкову яскраву позитивну емодзі
+            emoticon = random.choice(['🔥', '👍', '❤️', '🚀', '👏', '🤩'])
+            await send_safe_reaction(client, event.chat_id, event.message.id, emoticon)
+        except Exception as e:
+            print(f"❌ Помилка в обробнику нашого каналу: {e}")
+
+    # 2. Автокоментарі та реакції для чужих цільових каналів
     @client.on(events.NewMessage(chats=TARGET_CHANNELS))
     async def handler(event):
         try:
@@ -79,10 +114,18 @@ def register_commenter(client):
             try:
                 await client.send_message(entity=event.chat_id, message=comment, comment_to=event.message)
                 print(f"✅ [@{channel_name}] Коментар успішно опубліковано: {comment}")
+                
+                # Відправляємо лайк/реакцію на пост каналу через 1-3 секунди після відправки коментаря
+                await asyncio.sleep(random.uniform(1.0, 3.0))
+                emoticon = random.choice(['👍', '🔥', '❤️', '🚀', '👏', '🤩'])
+                print(f"👍 [@{channel_name}] Ставлю лайк/реакцію на пост...")
+                await send_safe_reaction(client, event.chat_id, event.message.id, emoticon)
+                
             except Exception as send_err:
                 print(f"❌ [@{channel_name}] Помилка при відправці коментаря: {send_err}")
                 print(f"👉 ПІДКАЗКА: Переконайтеся, що ваш юзербот вступив у чат обговорення (group/chat) для каналу @{channel_name}!")
             
         except Exception as e:
             print(f"❌ Не вдалося обробити новий пост: {e}")
+
 
