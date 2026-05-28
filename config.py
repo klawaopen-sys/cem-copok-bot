@@ -41,6 +41,7 @@ COMMENT_CHANNELS = [
     'incrypted',
     'kryptodohidua',
     'Insider_krypto',
-    'Coin_Post'
+    'Coin_Post',
+    'telemetr_me'
 ]
 
