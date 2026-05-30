@@ -97,7 +97,8 @@ AI_DONOR_CHANNELS = [
     'neuro_news',
     'prompt_hub',
     'techcrunch',
-    'ai_tools'
+    'ai_tools',
+    'AI_to_business'
 ]
 
 # Сигнатура з посиланням на бібліотекаря в кінці постів ІИ
