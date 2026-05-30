@@ -41,14 +41,9 @@ REFERRAL_LINKS = {
 # Канали-донори для обіду новин трейдингу (12:00)
 NEWS_DONOR_CHANNELS = ["cointelegraph", "Coin_Post", -1001593088122]
 
-# Канали для розумного автокомментування трейдингу (Gemini)
-COMMENT_CHANNELS = [
-    'doubletop',
-    'incrypted',
-    'kryptodohidua',
-    'Insider_krypto',
-    'Coin_Post'
-]
+# Канали для розумного автокомментування трейдингу (Gemini) - ВИМКНЕНО
+COMMENT_CHANNELS = []
+
 
 # Канали-донори для промо-акцій трейдингу (режим ДОНОРА для Сім сорок)
 TRADING_DONOR_CHANNELS = [
