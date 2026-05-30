@@ -39,7 +39,15 @@ REFERRAL_LINKS = {
 }
 
 # Канали-донори для обіду новин трейдингу (12:00)
-NEWS_DONOR_CHANNELS = ["cointelegraph", "Coin_Post", -1001593088122]
+NEWS_DONOR_CHANNELS = [
+    "cointelegraph",
+    "Coin_Post",
+    "incrypted",
+    "Binance_UA_official",
+    "kryptodohidua",
+    "doubletop",
+    -1001593088122
+]
 
 # Канали для розумного автокомментування трейдингу (Gemini) - ВИМКНЕНО
 COMMENT_CHANNELS = []
