@@ -167,7 +167,13 @@ def select_and_rewrite_ai_with_gemini(news_list, category_name):
         "4. КРИТИЧНО: Заборонено давати будь-які фінансові поради, аналітику цін криптовалют чи торгові сигнали. Тільки софт, ШІ-інструменти, гайди та технології.\n"
         "5. КРИТИЧНО: Пиши бездоганною, природною українською мовою без русизмів чи кальок з англійської. Наприклад, 'stickers from a photo' перекладай виключно як 'стікери з фото' (використовуй прийменник 'з' для позначення джерела/походження, а не 'за', що означає плату або обмін). Текст має бути стилістично ідеально відшліфованим.\n"
         "6. Використовуй ТІЛЬКИ HTML-теги для виділення жирного тексту: <b>жирний текст</b>.\n"
-        "7. Золоте правило: у НАЙПЕРШОМУ рядку відповіді напиши ТІЛЬКИ індекс у форматі 'INDEX: X', а далі з нового рядка пиши текст самого поста.\n\n"
+        "7. Золоте правило: у НАЙПЕРШОМУ рядку відповіді напиши ТІЛЬКИ індекс у форматі 'INDEX: X', а далі з нового рядка пиши текст самого поста.\n"
+        "8. ВАЖЛИВО: Якщо в обраному пості-кандидаті є готовий промпт (наприклад, для Midjourney, ChatGPT, Flux, Stable Diffusion тощо) або корисний шаблон/код запиту, обов'язково знайди та витягни його у первісному вигляді (зазвичай англійською мовою, без змін).\n"
+        "   - Наприкінці своєї відповіді, після тексту самого поста, додай цей промпт, виділивши його спеціальними тегами ось так:\n"
+        "     [PROMPT_START]\n"
+        "     тут текст промпту/промптів (наприклад: /imagine prompt: ...)\n"
+        "     [PROMPT_END]\n"
+        "   - Якщо готового промпту в пості немає, НЕ додавай теги [PROMPT_START] та [PROMPT_END] взагалі.\n\n"
         "Почни відповідь з 'INDEX: X' та пиши виключно українською мовою з HTML-форматуванням <b>...</b> для жирного тексту."
     )
 
@@ -192,10 +198,22 @@ def select_and_rewrite_ai_with_gemini(news_list, category_name):
                     pass
             
             chosen_item = news_list[chosen_index] if chosen_index < len(news_list) else news_list[0]
-            return post_text, chosen_item
+            
+            # Витягуємо промпт, якщо він присутній в тексті
+            extracted_prompt = None
+            if "[PROMPT_START]" in post_text and "[PROMPT_END]" in post_text:
+                try:
+                    parts = post_text.split("[PROMPT_START]")
+                    post_text = parts[0].strip()
+                    prompt_part = parts[1].split("[PROMPT_END]")[0].strip()
+                    extracted_prompt = prompt_part
+                except Exception:
+                    pass
+                    
+            return post_text, chosen_item, extracted_prompt
     except Exception as e:
         print(f"❌ Помилка генерації ШІ-поста через Gemini: {e}")
-    return None, None
+    return None, None, None
 
 # ---------------------------------------------------------------------
 # В. Загальні утиліти (водяний знак, автозаміна посилань)
@@ -291,18 +309,43 @@ async def post_ai_category_update(client, category_name):
     """Публікує пост ІИ під конкретний слот/категорію"""
     print(f"🚀 Початок публікації для ШІ-категорії '{category_name}'...")
     try:
+        from telethon.tl.functions.channels import GetFullChannelRequest
+        
         news_list = await get_latest_ai_posts(client)
         if not news_list:
             print("⚠️ ШІ-постів у донорів не знайдено.")
             return
 
-        post_text, chosen_item = select_and_rewrite_ai_with_gemini(news_list, category_name)
+        post_text, chosen_item, extracted_prompt = select_and_rewrite_ai_with_gemini(news_list, category_name)
         if not post_text:
             print("❌ Не вдалося згенерувати ШІ-пост.")
             return
 
-        # Не додаємо сигнатуру за запитом користувача
+        # Перевіряємо, чи є підв'язана група для коментарів
+        has_linked_chat = False
+        try:
+            c_entity = await client.get_entity(config.AI_TARGET_CHANNEL)
+            full_chat_info = await client(GetFullChannelRequest(c_entity))
+            if full_chat_info.full_chat.linked_chat_id:
+                has_linked_chat = True
+        except Exception as e:
+            print(f"⚠️ Не вдалося перевірити наявність коментарів у каналі: {e}")
+
+        # Формуємо фінальний текст
         final_post_text = post_text
+        
+        # Якщо є промпт, але коментарі відсутні — додаємо промпт безпосередньо в пост!
+        if extracted_prompt and not has_linked_chat:
+            # Адаптуємо заклик до дії: замінюємо коментарі на пост
+            final_post_text = final_post_text.replace("у коментарях нижче", "прямо з поста нижче")
+            final_post_text = final_post_text.replace("в коментарях нижче", "прямо з поста нижче")
+            final_post_text = final_post_text.replace("в коментарях", "прямо з поста")
+            final_post_text = final_post_text.replace("в комментариях ниже", "прямо из поста ниже")
+            final_post_text = final_post_text.replace("в комментариях", "прямо из поста")
+            
+            # Додаємо гарно оформлений промпт у тегах <code> (копіювання одним тапом!)
+            final_post_text += f"\n\n📋 <b>Промпт для генерації:</b>\n<code>{extracted_prompt}</code>"
+
         final_post_text = auto_replace_links(final_post_text)
 
         # Скачування картинки + ватермарк
@@ -315,14 +358,25 @@ async def post_ai_category_update(client, category_name):
                 print(f"⚠️ Помилка обробки картинки: {e}")
 
         # Публікуємо в ІИ-канал через Telethon (від імені користувача Клава!)
+        msg = None
         if photo_path and os.path.exists(photo_path):
-            await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
+            msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
             try: os.remove(photo_path)
             except Exception: pass
         else:
-            await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
+            msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
             
         print(f"✅ ШІ-пост '{category_name}' успішно опубліковано!")
+
+        # Якщо коментарі є і знайдено промпт, публікуємо його у коментарях
+        if msg and extracted_prompt and has_linked_chat:
+            try:
+                await asyncio.sleep(3.0)  # Маленька затримка для надійності
+                await client.send_message(entity=config.AI_TARGET_CHANNEL, message=extracted_prompt, comment_to=msg)
+                print("✅ Промпт успішно опубліковано в коментарях!")
+            except Exception as e:
+                print(f"⚠️ Не вдалося опублікувати промпт в коментарях: {e}")
+                
     except Exception as e:
         print(f"❌ Помилка в процесі публікації ШІ-категорії '{category_name}': {e}")
 
