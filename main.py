@@ -2,30 +2,248 @@ import schedule
 import time
 import asyncio
 import threading
-from poster import run_poster
-from news_poster import run_news_poster
-from commenter import register_commenter
-from telethon import TelegramClient
-import config
 import os
+import re
+from telethon import TelegramClient
+from aiogram import Bot, Dispatcher, Router, F
+from aiogram.types import Message, CallbackQuery, PreCheckoutQuery, LabeledPrice
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.filters import Command, CommandObject
 
+# Імпорт логіки публікацій
+from poster import run_poster
+from news_poster import run_news_poster, run_ai_news_poster, run_psy_news_poster, run_weekly_digest
+from commenter import register_commenter
+import config
+
+# Ініціалізація юзербота Telethon (Клава)
 client = TelegramClient('klava', config.API_ID, config.API_HASH)
 main_loop = None
 
+# Ініціалізація бота-бібліотекаря Aiogram
+bot = Bot(token=config.LIBRARIAN_BOT_TOKEN)
+dp = Dispatcher()
+router = Router()
+dp.include_router(router)
+
+# ---------------------------------------------------------------------
+# А. Логіка Бота-Бібліотекаря (Subscription Gate & Telegram Stars)
+# ---------------------------------------------------------------------
+async def check_subscriptions(user_id: int) -> list:
+    """Перевіряє підписку користувача на обов'язкові канали. Повертає список непідписаних."""
+    unsubscribed = []
+    for channel, name in config.REQUIRED_CHANNELS.items():
+        try:
+            member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
+            if member.status not in ['member', 'administrator', 'creator']:
+                unsubscribed.append(channel)
+        except Exception as e:
+            print(f"⚠️ Помилка перевірки підписки для {channel}: {e}")
+            unsubscribed.append(channel)
+    return unsubscribed
+
+def get_subscription_keyboard(unsubscribed, file_key):
+    """Створює меню з кнопками підписки та кнопками перевірки/оплати"""
+    builder = InlineKeyboardBuilder()
+    for channel in unsubscribed:
+        name = config.REQUIRED_CHANNELS.get(channel, channel)
+        url = f"https://t.me/{channel.replace('@', '')}"
+        builder.button(text=f"📌 Підписатися на {name.split('|')[1].strip() if '|' in name else name}", url=url)
+    builder.button(text="🔄 Перевірити підписку", callback_data=f"check_{file_key}")
+    builder.button(text="⭐️ Забрати за 1 Зірку (без підписки)", callback_data=f"pay_{file_key}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+async def deliver_file_or_lock(message: Message, file_key: str, is_callback: bool = False):
+    """Перевіряє підписку та копіює потрібне повідомлення/книгу з каналу-бібліотеки @l_ibrar_y"""
+    user_chat_id = message.chat.id
+    user_id = message.from_user.id
+    
+    unsubscribed = await check_subscriptions(user_id)
+    
+    # Витягуємо номер ID повідомлення з ключа
+    match = re.search(r'\d+', file_key)
+    if not match:
+        error_text = "❌ <b>Помилка:</b> Посилання не містить правильного ідентифікатора книги."
+        if is_callback: await message.edit_text(error_text, parse_mode="HTML")
+        else: await message.answer(error_text, parse_mode="HTML")
+        return
+        
+    message_id = int(match.group(0))
+    
+    if not unsubscribed:
+        # Успішно підписаний на всі канали!
+        loading_msg = None
+        if is_callback: await message.edit_text("⏳ Перевірка успішна! Завантажую книгу з бібліотеки...")
+        else: loading_msg = await message.answer("⏳ Перевірка успішна! Завантажую книгу з бібліотеки...")
+            
+        try:
+            # Копіюємо повідомлення з каналу-бібліотеки прямо в чат користувачу
+            await bot.copy_message(
+                chat_id=user_chat_id,
+                from_chat_id='@l_ibrar_y',
+                message_id=message_id
+            )
+            if is_callback: await message.delete()
+            elif loading_msg: await loading_msg.delete()
+        except Exception as e:
+            error_text = (
+                f"❌ <b>Помилка завантаження книги!</b>\n\n"
+                f"Бот не зміг знайти або скопіювати повідомлення з ID <code>{message_id}</code> з каналу <b>@l_ibrar_y</b>.\n\n"
+                f"<i>👉 Переконайтеся, що пост {message_id} існує в каналі @l_ibrar_y і бот доданий туди як адміністратор!</i>"
+            )
+            if is_callback: await message.edit_text(error_text, parse_mode="HTML")
+            else:
+                if loading_msg: await loading_msg.delete()
+                await message.answer(error_text, parse_mode="HTML")
+    else:
+        # Користувач не підписаний на всі канали
+        lock_text = (
+            "🔒 <b>Доступ обмежено!</b>\n\n"
+            "Щоб безкоштовно розблокувати цей файл, тобі потрібно підписатися на наші корисні канали.\n\n"
+            "Будь ласка, підпишись на канали нижче та натисни кнопку перевірки підписки:"
+        )
+        if is_callback:
+            await message.edit_text(lock_text, reply_markup=get_subscription_keyboard(unsubscribed, file_key), parse_mode="HTML")
+        else:
+            await message.answer(lock_text, reply_markup=get_subscription_keyboard(unsubscribed, file_key), parse_mode="HTML")
+
+@router.message(Command("start"))
+async def cmd_start(message: Message, command: CommandObject):
+    file_key = command.args
+    if file_key:
+        await deliver_file_or_lock(message, file_key.strip())
+    else:
+        welcome_text = (
+            "<b>Привіт! Я твій особистий Бібліотекар 📚</b>\n\n"
+            "Я видаю корисні книги, чек-листи та ШІ-промпти за підписку на наші канали!\n\n"
+            "Перейдіть у наші канали, щоб знайти посилання на завантаження потрібних матеріалів:\n"
+            "📢 @cem_copok (Трейдинг)\n"
+            "🧠 @ncux_olo_guY (Психологія)\n"
+            "🤖 @te_shoo_treba (AI)"
+        )
+        await message.answer(welcome_text, parse_mode="HTML")
+
+@router.callback_query(F.data.startswith("check_"))
+async def handle_check_subscription(query: CallbackQuery):
+    file_key = query.data.replace("check_", "")
+    await deliver_file_or_lock(query.message, file_key, is_callback=True)
+    await query.answer()
+
+@router.callback_query(F.data.startswith("pay_"))
+async def handle_pay_with_stars(query: CallbackQuery):
+    file_key = query.data.replace("pay_", "")
+    user_chat_id = query.message.chat.id
+    match = re.search(r'\d+', file_key)
+    if not match:
+        await query.answer("❌ Помилка: неправильний ID файлу.", show_alert=True)
+        return
+        
+    message_id = int(match.group(0))
+    try:
+        await bot.send_invoice(
+            chat_id=user_chat_id,
+            title="Швидкий доступ до книги",
+            description=f"Отримати файл з ID {message_id} без обов'язкової підписки за 1 Зірку",
+            payload=f"stars_{message_id}",
+            provider_token="",  # Порожній токен для Telegram Stars!
+            currency="XTR",
+            prices=[LabeledPrice(label="Telegram Stars", amount=1)]
+        )
+        await query.answer()
+    except Exception as e:
+        await query.message.answer(f"❌ Не вдалося виставити рахунок: {e}")
+        await query.answer()
+
+@router.pre_checkout_query()
+async def handle_pre_checkout(query: PreCheckoutQuery):
+    await query.answer(ok=True)
+
+@router.message(F.successful_payment)
+async def handle_successful_payment(message: Message):
+    payload = message.successful_payment.invoice_payload
+    match = re.search(r'\d+', payload)
+    if not match:
+        await message.answer("❌ Помилка обробки оплати.")
+        return
+        
+    message_id = int(match.group(0))
+    try:
+        await bot.copy_message(
+            chat_id=message.chat.id,
+            from_chat_id='@l_ibrar_y',
+            message_id=message_id
+        )
+        await message.answer("🎉 <b>Дякуємо за підтримку зірками! Твій файл успішно завантажено. Приємного читання!</b>", parse_mode="HTML")
+    except Exception as e:
+        await message.answer(
+            f"❌ <b>Оплата пройшла успішно, але сталася помилка доставки файлу!</b>\n\n"
+            f"Бот не зміг скопіювати повідомлення з ID {message_id} з каналу @l_ibrar_y.\n"
+            f"<i>Будь ласка, зверніться до адміністратора.</i>",
+            parse_mode="HTML"
+        )
+
+# ---------------------------------------------------------------------
+# Б. Логіка Планувальника Публікацій (Трейдинг та ШІ)
+# ---------------------------------------------------------------------
 def morning_job():
     print(f"⏰ Час {config.MORNING_POST_TIME}! Запускаю ранковий фінансовий огляд...")
-    try:
-        run_poster()
-    except Exception as e:
-        print(f"Помилка ранкового поста: {e}")
+    try: run_poster()
+    except Exception as e: print(f"Помилка ранкового поста: {e}")
 
 def noon_job():
-    print("⏰ Час 12:00! Запускаю денний огляд новин...")
+    print("⏰ Час 12:00! Запускаю денний огляд новин трейдингу...")
     try:
-        if main_loop and client:
-            run_news_poster(client, main_loop)
-    except Exception as e:
-        print(f"Помилка денного поста: {e}")
+        if main_loop and client: run_news_poster(client, main_loop)
+    except Exception as e: print(f"Помилка денного поста трейдингу: {e}")
+
+def ai_job_slot_1():
+    print("⏰ Час SLOT 1 (09:00)! Запускаю AI News & Web3 Tech...")
+    try:
+        if main_loop and client: run_ai_news_poster(client, main_loop, "AI News & Web3 Tech")
+    except Exception as e: print(f"Помилка в SLOT 1: {e}")
+
+def ai_job_slot_2():
+    print("⏰ Час SLOT 2 (13:00)! Запускаю AI Productivity & Work...")
+    try:
+        if main_loop and client: run_ai_news_poster(client, main_loop, "AI Productivity & Work")
+    except Exception as e: print(f"Помилка в SLOT 2: {e}")
+
+def ai_job_slot_3():
+    print("⏰ Час SLOT 3 (17:00)! Запускаю AI Finance & Dev Tools...")
+    try:
+        if main_loop and client: run_ai_news_poster(client, main_loop, "AI Finance & Dev Tools")
+    except Exception as e: print(f"Помилка в SLOT 3: {e}")
+
+def ai_job_slot_4():
+    print("⏰ Час SLOT 4 (21:00)! Запускаю AI Media & Creative...")
+    try:
+        if main_loop and client: run_ai_news_poster(client, main_loop, "AI Media & Creative")
+    except Exception as e: print(f"Помилка в SLOT 4: {e}")
+
+def psy_job_slot_1():
+    print("⏰ Час PSY SLOT 1 (09:00)! Запускаю Morning Motivation...")
+    try:
+        if main_loop and client: run_psy_news_poster(client, main_loop, "Morning Motivation")
+    except Exception as e: print(f"Помилка в PSY SLOT 1: {e}")
+
+def psy_job_slot_2():
+    print("⏰ Час PSY SLOT 2 (14:00)! Запускаю Practical Psychology...")
+    try:
+        if main_loop and client: run_psy_news_poster(client, main_loop, "Practical Psychology")
+    except Exception as e: print(f"Помилка в PSY SLOT 2: {e}")
+
+def psy_job_slot_3():
+    print("⏰ Час PSY SLOT 3 (19:00)! Запускаю Mindfulness & Relationships...")
+    try:
+        if main_loop and client: run_psy_news_poster(client, main_loop, "Mindfulness & Relationships")
+    except Exception as e: print(f"Помилка в PSY SLOT 3: {e}")
+
+def weekly_digest_job():
+    print("⏰ Час 14:00 (Неділя)! Запускаю тижневий дайджест...")
+    try:
+        if main_loop and client: run_weekly_digest(client, main_loop)
+    except Exception as e: print(f"Помилка тижневого дайджесту: {e}")
 
 def schedule_thread_func():
     """Фоновий потік для перевірки розкладу"""
@@ -33,38 +251,68 @@ def schedule_thread_func():
         schedule.run_pending()
         time.sleep(30)
 
+# ---------------------------------------------------------------------
+# В. Точка Запуску (Event Loop)
+# ---------------------------------------------------------------------
 async def main():
     global main_loop
     main_loop = asyncio.get_running_loop()
     
     print("=" * 45)
-    print("   🤖 КРИПТО-БОТ (POSTER + COMMENTER)")
+    print("   🤖 СУПЕР-БОТ: ТРЕЙДИНГ + ПСИХОЛОГІЯ + ІИ + БІБЛІОТЕКАР")
     print("=" * 45)
     
     if not os.path.exists("klava.session"):
         print("❌ Файл klava.session не знайдено! Юзербот не зможе працювати.")
         return
 
+    # 1. Запуск Telethon юзербота
     await client.start()
     print("✅ Telethon юзербот підключено успішно!")
     
-    # Реєструємо автокомментатор
+    # Реєструємо всі авторепостери та автокоментатори екосистеми
     register_commenter(client)
-    print("✅ Автокомментатор запущено (Слухаємо цільові канали)!")
+    print("✅ Юзербот обробники успішно зареєстровані!")
     
-    # Налаштовуємо розклад
+    # 2. Запуск Aiogram бота-бібліотекаря в цьому ж event loop!
+    asyncio.create_task(dp.start_polling(bot))
+    print("✅ Бот-Бібліотекар успішно запущено!")
+    
+    # 3. Налаштовуємо розклад публікацій
+    # Трейдинг
     schedule.every().day.at(config.MORNING_POST_TIME, "Europe/Kyiv").do(morning_job)
     schedule.every().day.at("12:00", "Europe/Kyiv").do(noon_job)
+    # Штучний Інтелект (AI)
+    schedule.every().day.at(config.AI_SLOT_1_TIME, "Europe/Kyiv").do(ai_job_slot_1)
+    schedule.every().day.at(config.AI_SLOT_2_TIME, "Europe/Kyiv").do(ai_job_slot_2)
+    schedule.every().day.at(config.AI_SLOT_3_TIME, "Europe/Kyiv").do(ai_job_slot_3)
+    schedule.every().day.at(config.AI_SLOT_4_TIME, "Europe/Kyiv").do(ai_job_slot_4)
+    # Психологія (Нейро-Апгрейд)
+    schedule.every().day.at(config.PSY_SLOT_1_TIME, "Europe/Kyiv").do(psy_job_slot_1)
+    schedule.every().day.at(config.PSY_SLOT_2_TIME, "Europe/Kyiv").do(psy_job_slot_2)
+    schedule.every().day.at(config.PSY_SLOT_3_TIME, "Europe/Kyiv").do(psy_job_slot_3)
+    # Тижневий дайджест трейдингу (неділя о 14:00)
+    schedule.every().sunday.at("14:00", "Europe/Kyiv").do(weekly_digest_job)
     
-    print(f"📅 Розклад ранковий: щодня о {config.MORNING_POST_TIME} (Київ)")
-    print("📅 Розклад денний:   щодня о 12:00 (Київ)")
-    print(f"📢 Канал: {config.TARGET_CHANNEL}")
+    print(f"📅 Зареєстровано розклад трейдингу (Київ):")
+    print(f"   - Ранковий аналіз: щодня о {config.MORNING_POST_TIME}")
+    print(f"   - Денні новини:    щодня о 12:00")
+    print(f"   - Тижневий дайджест: щонеділі о 14:00")
+    print(f"📅 Зареєстровано розклад ШІ (Київ):")
+    print(f"   - 1. AI News & Web3 Tech:        щодня о {config.AI_SLOT_1_TIME}")
+    print(f"   - 2. AI Productivity & Work:     щодня о {config.AI_SLOT_2_TIME}")
+    print(f"   - 3. AI Finance & Dev Tools:     щодня о {config.AI_SLOT_3_TIME}")
+    print(f"   - 4. AI Media & Creative:        щодня о {config.AI_SLOT_4_TIME}")
+    print(f"📅 Зареєстровано розклад Психології (Київ):")
+    print(f"   - 1. Morning Motivation:         щодня о {config.PSY_SLOT_1_TIME}")
+    print(f"   - 2. Practical Psychology:       щодня о {config.PSY_SLOT_2_TIME}")
+    print(f"   - 3. Mindfulness & Relationships: щодня о {config.PSY_SLOT_3_TIME}")
     
     # Запускаємо розклад у фоновому потоці
     threading.Thread(target=schedule_thread_func, daemon=True).start()
     
-    print("⏳ Очікую подій та часу публікації...")
-    # Тримаємо програму відкритою і слухаємо Telethon події
+    print("⏳ Супер-бот активний та очікує подій...")
+    # Тримаємо програму відкритою і слухаємо Telethon
     await client.run_until_disconnected()
 
 if __name__ == "__main__":

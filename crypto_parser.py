@@ -129,7 +129,7 @@ def get_gemini_trader_advice(crypto, forex, market):
             "Напиши тільки сам текст поради, без будь-яких вступних слів, лапок чи привітань. Порада має починатися одразу з суті."
         )
         
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
         headers = {"Content-Type": "application/json"}
         payload = {
             "contents": [{

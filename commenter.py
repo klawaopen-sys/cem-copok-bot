@@ -3,17 +3,21 @@ import requests
 from telethon import events
 import asyncio
 import random
+import re
+import os
+from PIL import Image
 
-# Завантажуємо список каналів з конфігурації
-TARGET_CHANNELS = getattr(config, 'COMMENT_CHANNELS', ['doubletop', 'Binance_UA_official'])
+# Завантаження налаштувань
+TARGET_CHANNELS = getattr(config, 'COMMENT_CHANNELS', [])
+TRADING_DONOR_CHANNELS = getattr(config, 'TRADING_DONOR_CHANNELS', [])
+PSY_DONOR_CHANNELS = getattr(config, 'PSY_DONOR_CHANNELS', [])
 
 def get_gemini_comment(post_text):
+    """Генерує розумний коментар до трейдинг-посту через Gemini"""
     if not config.GEMINI_API_KEY:
         return "Цікаво, будемо спостерігати за ринком! 👀"
     try:
-        # Обрізаємо дуже довгі тексти, щоб не витрачати токени
         post_text = post_text[:2000] if post_text else ""
-        
         prompt = (
             "Ти — досвідчений і трохи іронічний крипто-трейдер та інвестор. "
             "Напиши короткий, змістовний і максимально природний коментар (1-2 речення) до наступного поста.\n\n"
@@ -29,14 +33,12 @@ def get_gemini_comment(post_text):
             "- Текст коментаря має бути коротким, живим та ємним.\n\n"
             f"Текст поста:\n{post_text}"
         )
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         r = requests.post(url, headers=headers, json=payload, timeout=15)
         if r.status_code == 200:
-            data = r.json()
-            comment = data['candidates'][0]['content']['parts'][0]['text'].strip()
-            # Видаляємо зайві лапки, якщо нейромережа їх додала
+            comment = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
             if comment.startswith('"') and comment.endswith('"'):
                 comment = comment[1:-1]
             if comment.startswith('«') and comment.endswith('»'):
@@ -48,99 +50,246 @@ def get_gemini_comment(post_text):
         print(f"Помилка генерації коментаря: {e}")
     return "Цікаво, подивимось що з цього вийде! 👀"
 
+def get_gemini_psychology_rewrite(post_text):
+    """Використовує Gemini для унікального рерайту психологічного поста українською мовою"""
+    if not config.GEMINI_API_KEY:
+        return post_text
+    try:
+        post_text = post_text[:2000] if post_text else ""
+        prompt = (
+            "Ти — професійний психолог, автор популярного Telegram-каналу про психологію та саморозвиток.\n"
+            "Твоє завдання — перекласти та переписати наступний пост українською мовою. Зроби його унікальним, цікавим та легким для сприйняття.\n\n"
+            "КРИТИЧНО ВАЖЛИВІ ПРАВИЛА:\n"
+            "1. Пост має бути написаний красивою, грамотною українською мовою з професійним, але розмовним і захоплюючим тоном.\n"
+            "2. Структуруй текст: використовуй абзаци, списки та доречні емодзі.\n"
+            "3. Використовуй ТІЛЬКИ HTML-теги для виділення жирного тексту: <b>жирний текст</b>. НІКОЛИ не використовуй маркдаун із зірочками (** або *).\n"
+            "4. Текст має бути лаконічним і СТРОГО до 650-700 символів (разом із пробілами), оскільки він буде підписом до фотографії, ліміт якої в Telegram становить 1024 символи.\n"
+            "5. Напиши ТІЛЬКИ текст рерайту без будь-яких вступних слів, привітань, лапок чи завершальних фраз. Починай одразу з суті.\n\n"
+            f"Оригінальний пост:\n{post_text}"
+        )
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
+        headers = {"Content-Type": "application/json"}
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        r = requests.post(url, headers=headers, json=payload, timeout=30)
+        if r.status_code == 200:
+            rewrite = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            if rewrite.startswith('"') and rewrite.endswith('"'):
+                rewrite = rewrite[1:-1]
+            if rewrite.startswith('«') and rewrite.endswith('»'):
+                rewrite = rewrite[1:-1]
+            return rewrite
+    except Exception as e:
+        print(f"❌ Помилка під час рерайту через Gemini: {e}")
+    return None
+
 async def send_safe_reaction(client, chat_id, message_id, emoticon=None):
-    """Безпечно надсилає реакцію на повідомлення, ігноруючи помилки обмежень каналу"""
+    """Безпечно надсилає реакцію на повідомлення"""
     if not emoticon:
         emoticon = random.choice(['👍', '🔥', '❤️', '🚀', '👏', '🤩'])
     try:
         from telethon.tl.functions.messages import SendReactionRequest
         from telethon.tl.types import ReactionEmoji
-        
         await client(SendReactionRequest(
             peer=chat_id,
             msg_id=message_id,
             reaction=[ReactionEmoji(emoticon=emoticon)]
         ))
-        print(f"✅ Реакцію '{emoticon}' успішно встановлено на повідомлення {message_id}!")
         return True
-    except Exception as e:
-        print(f"⚠️ Не вдалося встановити реакцію '{emoticon}': {e}")
+    except Exception:
         return False
 
+def apply_watermark(photo_path):
+    """Накладає брендований водяний знак logo.jpg на фотографію"""
+    try:
+        logo_file = "logo.jpg"
+        if photo_path and os.path.exists(photo_path) and os.path.exists(logo_file):
+            print("🎨 Накладаю водяний знак бренду...")
+            main_img = Image.open(photo_path).convert("RGBA")
+            logo = Image.open(logo_file).convert("RGBA")
+            
+            # Робимо білий фон логотипу прозорим
+            datas = logo.getdata()
+            new_data = []
+            for item in datas:
+                if item[0] > 220 and item[1] > 220 and item[2] > 220:
+                    new_data.append((255, 255, 255, 0))
+                else:
+                    new_data.append((item[0], item[1], item[2], int(item[3] * 0.8)))
+            logo.putdata(new_data)
+            
+            # Масштабуємо лого до 12.5% ширини фото
+            logo_width = int(main_img.width * 0.125)
+            aspect_ratio = logo.height / logo.width
+            logo_height = int(logo_width * aspect_ratio)
+            logo = logo.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
+            
+            # Позиція внизу праворуч
+            padding = int(main_img.width * 0.03)
+            position = (main_img.width - logo_width - padding, main_img.height - logo_height - padding)
+            
+            transparent = Image.new('RGBA', main_img.size, (0,0,0,0))
+            transparent.paste(logo, position)
+            
+            result = Image.alpha_composite(main_img, transparent)
+            result.convert("RGB").save(photo_path, "JPEG")
+            print("✅ Водяний знак успішно накладено!")
+            return True
+    except Exception as e:
+        print(f"⚠️ Не вдалося накласти водяний знак: {e}")
+    return False
+
+def auto_replace_links(text):
+    """Автоматично шукає посилання на канал @l_ibrar_y та перетворює їх на посилання на бота-бібліотекаря"""
+    if not text:
+        return text
+    pattern = r'https?://t\.me/l_ibrar_y/(\d+)'
+    return re.sub(pattern, r'https://t.me/librar_ian_bot?start=\1', text)
+
 def register_commenter(client):
-    """Реєструє обробники подій для автокомментування та автореакцій"""
+    """Реєструє обробники подій Telethon для всієї екосистеми супер-бота"""
     
-    print(f"📡 Автокоментатор налаштовано для каналів: {TARGET_CHANNELS}")
-    
-    # 1. Реакції на нові пости у нашому власному каналі (@cem_copok)
-    @client.on(events.NewMessage(chats=[config.TARGET_CHANNEL]))
-    async def own_channel_handler(event):
-        try:
-            print(f"🔔 Новий пост у нашому каналі {config.TARGET_CHANNEL}! Готуюсь поставити лайк...")
-            # Імітуємо перегляд поста людиною (затримка від 5 до 15 секунд)
-            delay = random.uniform(5.0, 15.0)
-            await asyncio.sleep(delay)
+    # ---------------------------------------------------------------------
+    # А. Універсальний глобальний обробник нових постів у всіх підписаних каналах
+    # ---------------------------------------------------------------------
+    @client.on(events.NewMessage())
+    async def global_channel_handler(event):
+        # Реагуємо тільки на пости в каналах (ігноруємо приватні діалоги та звичайні групи)
+        if not event.is_channel or not event.post:
+            return
             
-            # Вибираємо випадкову яскраву позитивну емодзі
-            emoticon = random.choice(['🔥', '👍', '❤️', '🚀', '👏', '🤩'])
-            await send_safe_reaction(client, event.chat_id, event.message.id, emoticon)
-        except Exception as e:
-            print(f"❌ Помилка в обробнику нашого каналу: {e}")
-
-    # 2. Автокоментарі та реакції для чужих цільових каналів
-    @client.on(events.NewMessage(chats=TARGET_CHANNELS))
-    async def handler(event):
         try:
-            # Отримуємо назву каналу
             chat = await event.get_chat()
-            channel_name = chat.username if chat.username else str(chat.id)
+            channel_id = event.chat_id
+            channel_username = chat.username if chat.username else str(chat.id)
+            channel_title = chat.title if hasattr(chat, 'title') else "Канал"
             
-            post_text = event.raw_text
+            # Визначаємо, чи це наш власний канал
+            our_usernames = [
+                config.TARGET_CHANNEL.replace('@', '').strip().lower() if hasattr(config, 'TARGET_CHANNEL') else '',
+                config.PSY_TARGET_CHANNEL.replace('@', '').strip().lower() if hasattr(config, 'PSY_TARGET_CHANNEL') else '',
+                config.AI_TARGET_CHANNEL.replace('@', '').strip().lower() if hasattr(config, 'AI_TARGET_CHANNEL') else ''
+            ]
+            is_our_channel = (
+                channel_username.lower() in our_usernames or 
+                str(channel_id) in our_usernames or
+                channel_id in [2231119273, 2108752101, 2049134376, 2147858686] # Відомі ID наших каналів
+            )
             
-            # Пропускаємо порожні або занадто короткі повідомлення (опитування, стікери, картини без тексту)
-            if not post_text or len(post_text.strip()) < 15:
-                print(f"⏭️ [@{channel_name}] Пост занадто короткий або порожній. Пропускаю.")
-                return
+            # Визначаємо, чи це канал для коментування трейдингу
+            comment_usernames = [c.lower().strip() for c in TARGET_CHANNELS]
+            is_comment_channel = (
+                channel_username.lower() in comment_usernames or 
+                str(channel_id) in comment_usernames
+            )
+            
+            # --- 1. АВТОМАТИЧНИЙ ЛАЙК ДЛЯ ВСІХ ПІДПИСАНИХ КАНАЛІВ (Включаючи ті, де Клава адмін або просто підписана) ---
+            print(f"👍 [{channel_title} (@{channel_username})] Новий пост! Ставлю автолайк...")
+            await asyncio.sleep(random.uniform(2.0, 7.0))
+            await send_safe_reaction(client, event.chat_id, event.message.id)
+            
+            # --- 2. НАШІ КАНАЛИ: Автозаміна посилань на бота-бібліотекаря ---
+            if is_our_channel:
+                post_text = event.message.text or event.message.message
+                if post_text and "t.me/l_ibrar_y/" in post_text:
+                    print(f"🔗 Виявлено посилання на бібліотеку в нашому каналі {channel_title}! Замінюю...")
+                    new_text = auto_replace_links(post_text)
+                    await client.edit_message(
+                        entity=event.chat_id,
+                        message=event.message.id,
+                        text=new_text,
+                        parse_mode='html'
+                    )
+                    print("✅ Посилання успішно замінено на бота-бібліотекаря!")
+                    
+            # --- 3. ЧУЖІ КАНАЛИ ТРЕЙДИНГУ: Розумне автокоментування через Gemini ---
+            elif is_comment_channel:
+                post_text = event.raw_text
+                if not post_text or len(post_text.strip()) < 15:
+                    return
+                    
+                print(f"📝 [{channel_title}] Генерую розумний коментар...")
+                loop = asyncio.get_event_loop()
+                comment = await loop.run_in_executor(None, get_gemini_comment, post_text)
                 
-            print(f"📝 [{event.date}] Новий пост у каналі @{channel_name}! Генерую розумний коментар...")
-            
-            # Виконуємо синхронний запит до Gemini у фоновому потоці, щоб не блокувати Telethon
-            loop = asyncio.get_event_loop()
-            comment = await loop.run_in_executor(None, get_gemini_comment, post_text)
-            
-            if not comment:
-                print("⚠️ Не вдалося згенерувати коментар через Gemini.")
-                return
-                
-            if comment.strip().upper() == "SKIP":
-                print(f"🇬🇧 [@{channel_name}] Пост англійською мовою. Коментар пропускаємо, але ставимо реакцію...")
-                # Імітуємо перегляд людиною
-                await asyncio.sleep(random.uniform(5.0, 12.0))
-                emoticon = random.choice(['👍', '🔥', '❤️', '🚀', '👏', '🤩'])
-                await send_safe_reaction(client, event.chat_id, event.message.id, emoticon)
-                return
-                
-            # Імітуємо поведінку людини: затримка на читання та друкування (від 15 до 45 секунд)
-            delay = random.uniform(15.0, 45.0)
-            print(f"⏳ [@{channel_name}] Очікую {delay:.1f} сек для природності перед відправкою...")
-            await asyncio.sleep(delay)
-            
-            # Відправляємо коментар
-            try:
+                if not comment or comment.strip().upper() == "SKIP":
+                    return
+                    
+                # Публікація коментаря з природною затримкою
+                delay = random.uniform(15.0, 45.0)
+                await asyncio.sleep(delay)
                 await client.send_message(entity=event.chat_id, message=comment, comment_to=event.message)
-                print(f"✅ [@{channel_name}] Коментар успішно опубліковано: {comment}")
+                print(f"✅ [{channel_title}] Коментар опубліковано: {comment}")
                 
-                # Відправляємо лайк/реакцію на пост каналу через 1-3 секунди після відправки коментаря
-                await asyncio.sleep(random.uniform(1.0, 3.0))
-                emoticon = random.choice(['👍', '🔥', '❤️', '🚀', '👏', '🤩'])
-                print(f"👍 [@{channel_name}] Ставлю лайк/реакцію на пост...")
-                await send_safe_reaction(client, event.chat_id, event.message.id, emoticon)
-                
-            except Exception as send_err:
-                print(f"❌ [@{channel_name}] Помилка при відправці коментаря: {send_err}")
-                print(f"👉 ПІДКАЗКА: Переконайтеся, що ваш юзербот вступив у чат обговорення (group/chat) для каналу @{channel_name}!")
-            
         except Exception as e:
-            print(f"❌ Не вдалося обробити новий пост: {e}")
+            print(f"❌ Помилка в глобальному обробнику каналів: {e}")
 
+    # ---------------------------------------------------------------------
+    # В. Режим ДОНОРА для акцій Трейдингу (Binance)
+    # ---------------------------------------------------------------------
+    if TRADING_DONOR_CHANNELS:
+        @client.on(events.NewMessage(chats=TRADING_DONOR_CHANNELS))
+        async def trading_donor_handler(event):
+            try:
+                chat = await event.get_chat()
+                channel_name = chat.username if chat.username else str(chat.id)
+                post_text = event.message.text or event.message.message
+                if not post_text: return
+                
+                # Перевіряємо на промо
+                post_text_lower = post_text.lower()
+                promo_keywords = ["промо", "акція", "акция", "конкурс", "розіграш", "бонус", "заробити", "launchpool", "megadrop"]
+                is_promo = any(kw in post_text_lower for kw in promo_keywords) or "binance.com" in post_text_lower
+                
+                if not is_promo: return
+                print(f"📣 [@{channel_name}] Виявлено промо-акцію Binance! Репощу...")
+                
+                # Підставляємо рефку
+                ref_link = config.REFERRAL_LINKS.get("Binance", "")
+                if ref_link:
+                    post_text = re.sub(r'https?://[^\s)]*binance\.com[^\s)]*', ref_link, post_text)
+                
+                # Автозаміна посилань на бібліотеку (про всяк випадок)
+                post_text = auto_replace_links(post_text)
+                
+                # Картинка + Водяний знак
+                photo_path = None
+                if event.message.photo:
+                    photo_path = await client.download_media(event.message, file="temp_trade_promo.jpg")
+                    apply_watermark(photo_path)
+                
+                await client.send_message(entity=config.TARGET_CHANNEL, message=post_text, file=photo_path, parse_mode='html')
+                print("✅ Промо-акцію Binance успішно опубліковано!")
+                if photo_path and os.path.exists(photo_path): os.remove(photo_path)
+            except Exception as e:
+                print(f"❌ Помилка донора трейдингу: {e}")
 
+    # ---------------------------------------------------------------------
+    # Г. Авторепостер для Психології (режим ДОНОРА з Gemini рерайтом) - ВИМКНЕНО НА КОРИСТЬ РОЗКЛАДУ
+    # ---------------------------------------------------------------------
+    # if PSY_DONOR_CHANNELS:
+    #     @client.on(events.NewMessage(chats=PSY_DONOR_CHANNELS))
+    #     async def psychology_donor_handler(event):
+    #         try:
+    #             chat = await event.get_chat()
+    #             channel_name = chat.username if chat.username else str(chat.id)
+    #             post_text = event.message.text or event.message.message
+    #             if not post_text or len(post_text.strip()) < 30: return
+    #             
+    #             print(f"🧠 [@{channel_name}] Новий пост по психології. Надсилаю на рерайт...")
+    #             rewritten = await asyncio.get_event_loop().run_in_executor(None, get_gemini_psychology_rewrite, post_text)
+    #             if not rewritten: return
+    #             
+    #             final_text = rewritten + getattr(config, 'PSY_SIGNATURE', '')
+    #             final_text = auto_replace_links(final_text)
+    #             
+    #             # Картинка + Ватермарк
+    #             photo_path = None
+    #             if event.message.photo:
+    #                 photo_path = await client.download_media(event.message, file="temp_psy_post.jpg")
+    #                 apply_watermark(photo_path)
+    #             
+    #             await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_text, file=photo_path, parse_mode='html')
+    #             print("✅ Психологічний пост опубліковано!")
+    #             if photo_path and os.path.exists(photo_path): os.remove(photo_path)
+    #         except Exception as e:
+    #             print(f"❌ Помилка донора психології: {e}")
