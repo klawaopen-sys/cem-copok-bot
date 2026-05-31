@@ -118,6 +118,6 @@ LIBRARY_CHANNEL = 'https://t.me/l_ibrar_y'
 # Канали, на які користувач повинен підписатися для доступу до книг
 REQUIRED_CHANNELS = {
     '@cem_copok': '📢 Сім сорок | Трейдинг',
-    '@ncux_olo_guY': '🧠 Нейро-Апгрейд | Психологія',
+    '@ncux_olo_guY': '🧠 Психологія',
     '@te_shoo_treba': '🤖 Те що треба | AI'
 }

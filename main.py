@@ -9,10 +9,12 @@ from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, CallbackQuery, PreCheckoutQuery, LabeledPrice
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command, CommandObject
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.context import FSMContext
 
 # Імпорт логіки публікацій
 from poster import run_poster
-from news_poster import run_news_poster, run_ai_news_poster, run_psy_news_poster, run_weekly_digest
+from news_poster import run_news_poster, run_ai_news_poster, run_psy_news_poster, run_weekly_digest, fill_daily_queue
 from commenter import register_commenter
 import config
 
@@ -25,6 +27,25 @@ bot = Bot(token=config.LIBRARIAN_BOT_TOKEN)
 dp = Dispatcher()
 router = Router()
 dp.include_router(router)
+
+class PsyChatStates(StatesGroup):
+    in_chat = State()
+
+async def check_psy_subscription(user_id: int) -> bool:
+    try:
+        member = await bot.get_chat_member(chat_id='@ncux_olo_guY', user_id=user_id)
+        return member.status in ['member', 'administrator', 'creator']
+    except Exception as e:
+        print(f"⚠️ Помилка перевірки підписки на психологію: {e}")
+        return False
+
+def get_psy_subscription_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📌 Підписатися на Психологію", url="https://t.me/ncux_olo_guY")
+    builder.button(text="🔄 Перевірити підписку", callback_data="check_psy_chat")
+    builder.adjust(1)
+    return builder.as_markup()
+
 
 # ---------------------------------------------------------------------
 # А. Логіка Бота-Бібліотекаря (Subscription Gate & Telegram Stars)
@@ -109,10 +130,41 @@ async def deliver_file_or_lock(message: Message, file_key: str, is_callback: boo
             await message.answer(lock_text, reply_markup=get_subscription_keyboard(unsubscribed, file_key), parse_mode="HTML")
 
 @router.message(Command("start"))
-async def cmd_start(message: Message, command: CommandObject):
+async def cmd_start(message: Message, command: CommandObject, state: FSMContext):
     file_key = command.args
     if file_key:
-        await deliver_file_or_lock(message, file_key.strip())
+        file_key = file_key.strip()
+        if file_key == "psy_chat":
+            user_id = message.from_user.id
+            is_subbed = await check_psy_subscription(user_id)
+            if not is_subbed:
+                await message.answer(
+                    "❌ <b>Тільки для підписників нашого каналу Психологія!</b>\n\n"
+                    "Будь ласка, підпишись на наш канал та натисни кнопку перевірки нижче, щоб розпочати діалог з ШІ-психологом:",
+                    reply_markup=get_psy_subscription_keyboard(),
+                    parse_mode="HTML"
+                )
+                return
+            
+            await state.clear()
+            await state.set_state(PsyChatStates.in_chat)
+            await state.update_data(history=[])
+            
+            from aiogram.utils.keyboard import ReplyKeyboardBuilder
+            kb_builder = ReplyKeyboardBuilder()
+            kb_builder.button(text="❌ Завершити діалог")
+            
+            await message.answer(
+                "🧠 <b>Вітаю! Я твій особистий ШІ-психолог.</b>\n\n"
+                "Я тут, щоб вислухати тебе, підтримати та допомогти розібратися в твоїх емоціях.\n\n"
+                "Наш діалог є абсолютно конфіденційним. Про що ти б хотів поговорити?\n\n"
+                "<i>👉 Натисни кнопку нижче в будь-який момент, щоб завершити діалог.</i>",
+                reply_markup=kb_builder.as_markup(resize_keyboard=True),
+                parse_mode="HTML"
+            )
+            return
+            
+        await deliver_file_or_lock(message, file_key)
     else:
         welcome_text = (
             "<b>Привіт! Я твій особистий Бібліотекар 📚</b>\n\n"
@@ -124,11 +176,39 @@ async def cmd_start(message: Message, command: CommandObject):
         )
         await message.answer(welcome_text, parse_mode="HTML")
 
+@router.callback_query(F.data == "check_psy_chat")
+async def handle_check_psy_chat_subscription(query: CallbackQuery, state: FSMContext):
+    user_id = query.from_user.id
+    is_subbed = await check_psy_subscription(user_id)
+    if not is_subbed:
+        await query.answer("❌ Ти ще не підписався на канал Психологія!", show_alert=True)
+        return
+        
+    await query.message.delete()
+    await state.clear()
+    await state.set_state(PsyChatStates.in_chat)
+    await state.update_data(history=[])
+    
+    from aiogram.utils.keyboard import ReplyKeyboardBuilder
+    kb_builder = ReplyKeyboardBuilder()
+    kb_builder.button(text="❌ Завершити діалог")
+    
+    await query.message.answer(
+        "🧠 <b>Вітаю! Я твій особистий ШІ-психолог.</b>\n\n"
+        "Я тут, щоб вислухати тебе, підтримати та допомогти розібратися в твоїх емоціях.\n\n"
+        "Наш діалог є абсолютно конфіденційним. Про що ти б хотів поговорити?\n\n"
+        "<i>👉 Натисни кнопку нижче в будь-який момент, щоб завершити діалог.</i>",
+        reply_markup=kb_builder.as_markup(resize_keyboard=True),
+        parse_mode="HTML"
+    )
+    await query.answer()
+
 @router.callback_query(F.data.startswith("check_"))
 async def handle_check_subscription(query: CallbackQuery):
     file_key = query.data.replace("check_", "")
     await deliver_file_or_lock(query.message, file_key, is_callback=True)
     await query.answer()
+
 
 @router.callback_query(F.data.startswith("pay_"))
 async def handle_pay_with_stars(query: CallbackQuery):
@@ -182,6 +262,80 @@ async def handle_successful_payment(message: Message):
             f"<i>Будь ласка, зверніться до адміністратора.</i>",
             parse_mode="HTML"
         )
+
+# --- Обработчики ШІ-Психолога ---
+
+@router.message(PsyChatStates.in_chat, F.text == "❌ Завершити діалог")
+async def cmd_stop_chat(message: Message, state: FSMContext):
+    await state.clear()
+    from aiogram.types import ReplyKeyboardRemove
+    await message.answer(
+        "🧠 <b>Діалог завершено. Сподіваюсь, наша розмова була корисною для тебе!</b>\n\n"
+        "Я завжди тут, коли тобі знадобиться підтримка або захочеться виговоритись. "
+        "Повертайся до нашого каналу <b>Психологія</b>🌿 у будь-який час! @ncux_olo_guY",
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode="HTML"
+    )
+
+@router.message(PsyChatStates.in_chat, F.text)
+async def handle_psychologist_chat(message: Message, state: FSMContext):
+    user_message = message.text.strip()
+    
+    state_data = await state.get_data()
+    history = state_data.get("history", [])
+    
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    
+    system_prompt = (
+        "Ти — професійний, емпатичний та теплий практичний психотерапевт. "
+        "Твоя мета — вислухати користувача, підтримати його, допомогти проаналізувати свої емоції та знизити рівень стресу. "
+        "Пиши виключно українською мовою. Спілкуйся м'яко, не давай сухих шаблонних відповідей робота. "
+        "Став відкриті запитання, використовуй активне слухання. Заборонено ставити діагнози чи виписувати ліки. "
+        "Якщо людина говорить про self-harm або критичну депресію, вислови максимальну турботу та м'яко запропонуй контакти служб підтримки."
+    )
+    
+    import requests
+    
+    api_key = getattr(config, 'GEMINI_PSY_API_KEY', config.GEMINI_API_KEY)
+    if not api_key:
+        await message.answer("⚠️ Помилка конфігурації: API-ключ не знайдено.")
+        return
+        
+    history.append({
+        "role": "user",
+        "parts": [{"text": user_message}]
+    })
+    
+    if len(history) > 12:
+        history = history[-12:]
+        
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
+    headers = {"Content-Type": "application/json"}
+    
+    payload = {
+        "contents": history,
+        "systemInstruction": {
+            "parts": [{"text": system_prompt}]
+        }
+    }
+    
+    try:
+        r = requests.post(url, headers=headers, json=payload, timeout=30)
+        if r.status_code == 200:
+            ai_reply = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            history.append({
+                "role": "model",
+                "parts": [{"text": ai_reply}]
+            })
+            await state.update_data(history=history)
+            await message.answer(ai_reply, parse_mode="HTML")
+        else:
+            print(f"Gemini API Error in Psy Chat: {r.status_code} - {r.text}")
+            await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати ще раз трохи пізніше.")
+    except Exception as e:
+        print(f"Exception in Psy Chat Gemini call: {e}")
+        await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати ще раз трохи пізніше.")
+
 
 # ---------------------------------------------------------------------
 # Б. Логіка Планувальника Публікацій (Трейдинг та ШІ)
@@ -245,6 +399,14 @@ def weekly_digest_job():
         if main_loop and client: run_weekly_digest(client, main_loop)
     except Exception as e: print(f"Помилка тижневого дайджесту: {e}")
 
+def daily_queue_job():
+    print("⏰ Час 03:00! Запускаю нічну підготовку контенту на добу...")
+    try:
+        if main_loop and client:
+            asyncio.run_coroutine_threadsafe(fill_daily_queue(client), main_loop)
+    except Exception as e: print(f"Помилка нічної підготовки черги: {e}")
+
+
 def schedule_thread_func():
     """Фоновий потік для перевірки розкладу"""
     while True:
@@ -293,6 +455,9 @@ async def main():
     schedule.every().day.at(config.PSY_SLOT_3_TIME, "Europe/Kyiv").do(psy_job_slot_3)
     # Тижневий дайджест трейдингу (неділя о 14:00)
     schedule.every().sunday.at("14:00", "Europe/Kyiv").do(weekly_digest_job)
+    # Нічна підготовка контенту (авточерга в Google Sheets)
+    schedule.every().day.at("03:00", "Europe/Kyiv").do(daily_queue_job)
+
     
     print(f"📅 Зареєстровано розклад трейдингу (Київ):")
     print(f"   - Ранковий аналіз: щодня о {config.MORNING_POST_TIME}")
@@ -307,6 +472,8 @@ async def main():
     print(f"   - 1. Morning Motivation:         щодня о {config.PSY_SLOT_1_TIME}")
     print(f"   - 2. Practical Psychology:       щодня о {config.PSY_SLOT_2_TIME}")
     print(f"   - 3. Mindfulness & Relationships: щодня о {config.PSY_SLOT_3_TIME}")
+    print(f"📅 Зареєстровано нічну авточергу в Sheets (Київ): щодня о 03:00")
+
     
     # Запускаємо розклад у фоновому потоці
     threading.Thread(target=schedule_thread_func, daemon=True).start()
