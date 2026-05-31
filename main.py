@@ -34,14 +34,21 @@ psy_dp = Dispatcher()
 psy_router = Router()
 psy_dp.include_router(psy_router)
 
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def get_psy_main_keyboard():
-    builder = ReplyKeyboardBuilder()
-    builder.button(text="💬 Розпочати діалог")
-    builder.button(text="🧠 Канал Психологія")
+    builder = InlineKeyboardBuilder()
+    builder.button(text="💬 Розпочати діалог", callback_data="start_psy_chat_from_menu")
+    builder.button(text="🧠 Канал Психологія", url="https://t.me/ncux_olo_guY")
     builder.adjust(1)
-    return builder.as_markup(resize_keyboard=True, persistent=True)
+    return builder.as_markup()
+
+def get_psy_back_to_channel_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🧠 Перейти до каналу Психологія", url="https://t.me/ncux_olo_guY")
+    builder.button(text="🔄 Розпочати новий діалог", callback_data="start_psy_chat_from_menu")
+    builder.adjust(1)
+    return builder.as_markup()
 
 class PsyChatStates(StatesGroup):
     in_chat = State()
@@ -178,29 +185,21 @@ async def cmd_psy_start(message: Message, state: FSMContext):
         parse_mode="HTML"
     )
 
-@psy_router.message(F.text == "🧠 Канал Психологія")
-async def cmd_psy_channel_link(message: Message):
-    await message.answer(
-        "🌿 <b>Наш канал з психології:</b>\n\n"
-        "Тут ми публікуємо щоденні корисні думки, мотивацію та практичні поради з психології.\n\n"
-        "👉 @ncux_olo_guY (https://t.me/ncux_olo_guY)",
-        disable_web_page_preview=False,
-        parse_mode="HTML"
-    )
-
-@psy_router.message(F.text == "💬 Розпочати діалог")
-async def cmd_psy_chat_start(message: Message, state: FSMContext):
-    user_id = message.from_user.id
+@psy_router.callback_query(F.data == "start_psy_chat_from_menu")
+async def handle_start_psy_chat_callback(query: CallbackQuery, state: FSMContext):
+    user_id = query.from_user.id
     is_subbed = await check_psy_subscription(user_id)
     if not is_subbed:
-        await message.answer(
+        await query.message.answer(
             "❌ <b>Тільки для підписників нашого каналу Психологія!</b>\n\n"
             "Будь ласка, підпишись на наш канал та натисни кнопку перевірки нижче, щоб розпочати діалог з ШІ-психологом:",
             reply_markup=get_psy_subscription_keyboard(),
             parse_mode="HTML"
         )
+        await query.answer()
         return
-    
+        
+    await query.message.delete()
     await state.clear()
     await state.set_state(PsyChatStates.in_chat)
     await state.update_data(history=[])
@@ -209,7 +208,7 @@ async def cmd_psy_chat_start(message: Message, state: FSMContext):
     kb_builder = ReplyKeyboardBuilder()
     kb_builder.button(text="❌ Завершити діалог")
     
-    await message.answer(
+    await query.message.answer(
         "🧠 <b>Вітаю! Я твій особистий ШІ-психолог.</b>\n\n"
         "Я тут, щоб вислухати тебе, підтримати та допомогти розібратися в твоїх емоціях.\n\n"
         "Наш діалог є абсолютно конфіденційним. Про що ти б хотів поговорити?\n\n"
@@ -217,6 +216,7 @@ async def cmd_psy_chat_start(message: Message, state: FSMContext):
         reply_markup=kb_builder.as_markup(resize_keyboard=True),
         parse_mode="HTML"
     )
+    await query.answer()
 
 @psy_router.callback_query(F.data == "check_psy_chat")
 async def handle_check_psy_chat_subscription(query: CallbackQuery, state: FSMContext):
@@ -310,11 +310,18 @@ async def handle_successful_payment(message: Message):
 @psy_router.message(PsyChatStates.in_chat, F.text == "❌ Завершити діалог")
 async def cmd_stop_chat(message: Message, state: FSMContext):
     await state.clear()
+    from aiogram.types import ReplyKeyboardRemove
+    
     await message.answer(
         "🧠 <b>Діалог завершено. Сподіваюсь, наша розмова була корисною для тебе!</b>\n\n"
-        "Я завжди тут, коли тобі знадобиться підтримка або захочеться виговоритись. "
-        "Повертайся до нашого каналу <b>Психологія</b>🌿 у будь-який час! @ncux_olo_guY",
-        reply_markup=get_psy_main_keyboard(),
+        "Я завжди тут, коли тобі знадобиться підтримка або захочеться виговоритись.",
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode="HTML"
+    )
+    
+    await message.answer(
+        "🌿 Оберіть дію нижче для переходу до каналу або старту нового діалогу:",
+        reply_markup=get_psy_back_to_channel_keyboard(),
         parse_mode="HTML"
     )
 
@@ -353,7 +360,7 @@ async def handle_psychologist_chat(message: Message, state: FSMContext):
     if len(history) > 12:
         history = history[-12:]
         
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     
     payload = {
@@ -454,7 +461,7 @@ async def handle_psychologist_voice(message: Message, state: FSMContext):
     if len(history) > 12:
         history = history[-12:]
         
-    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     gemini_headers = {"Content-Type": "application/json"}
     
     payload = {
