@@ -28,12 +28,27 @@ dp = Dispatcher()
 router = Router()
 dp.include_router(router)
 
+# Ініціалізація окремого бота-психолога Aiogram (@bbig333_bot)
+psy_bot = Bot(token=config.PSY_BOT_TOKEN)
+psy_dp = Dispatcher()
+psy_router = Router()
+psy_dp.include_router(psy_router)
+
+from aiogram.utils.keyboard import ReplyKeyboardBuilder
+
+def get_psy_main_keyboard():
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="💬 Розпочати діалог")
+    builder.button(text="🧠 Канал Психологія")
+    builder.adjust(1)
+    return builder.as_markup(resize_keyboard=True, persistent=True)
+
 class PsyChatStates(StatesGroup):
     in_chat = State()
 
 async def check_psy_subscription(user_id: int) -> bool:
     try:
-        member = await bot.get_chat_member(chat_id='@ncux_olo_guY', user_id=user_id)
+        member = await psy_bot.get_chat_member(chat_id='@ncux_olo_guY', user_id=user_id)
         return member.status in ['member', 'administrator', 'creator']
     except Exception as e:
         print(f"⚠️ Помилка перевірки підписки на психологію: {e}")
@@ -130,41 +145,10 @@ async def deliver_file_or_lock(message: Message, file_key: str, is_callback: boo
             await message.answer(lock_text, reply_markup=get_subscription_keyboard(unsubscribed, file_key), parse_mode="HTML")
 
 @router.message(Command("start"))
-async def cmd_start(message: Message, command: CommandObject, state: FSMContext):
+async def cmd_start(message: Message, command: CommandObject):
     file_key = command.args
     if file_key:
-        file_key = file_key.strip()
-        if file_key == "psy_chat":
-            user_id = message.from_user.id
-            is_subbed = await check_psy_subscription(user_id)
-            if not is_subbed:
-                await message.answer(
-                    "❌ <b>Тільки для підписників нашого каналу Психологія!</b>\n\n"
-                    "Будь ласка, підпишись на наш канал та натисни кнопку перевірки нижче, щоб розпочати діалог з ШІ-психологом:",
-                    reply_markup=get_psy_subscription_keyboard(),
-                    parse_mode="HTML"
-                )
-                return
-            
-            await state.clear()
-            await state.set_state(PsyChatStates.in_chat)
-            await state.update_data(history=[])
-            
-            from aiogram.utils.keyboard import ReplyKeyboardBuilder
-            kb_builder = ReplyKeyboardBuilder()
-            kb_builder.button(text="❌ Завершити діалог")
-            
-            await message.answer(
-                "🧠 <b>Вітаю! Я твій особистий ШІ-психолог.</b>\n\n"
-                "Я тут, щоб вислухати тебе, підтримати та допомогти розібратися в твоїх емоціях.\n\n"
-                "Наш діалог є абсолютно конфіденційним. Про що ти б хотів поговорити?\n\n"
-                "<i>👉 Натисни кнопку нижче в будь-який момент, щоб завершити діалог.</i>",
-                reply_markup=kb_builder.as_markup(resize_keyboard=True),
-                parse_mode="HTML"
-            )
-            return
-            
-        await deliver_file_or_lock(message, file_key)
+        await deliver_file_or_lock(message, file_key.strip())
     else:
         welcome_text = (
             "<b>Привіт! Я твій особистий Бібліотекар 📚</b>\n\n"
@@ -176,7 +160,65 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext)
         )
         await message.answer(welcome_text, parse_mode="HTML")
 
-@router.callback_query(F.data == "check_psy_chat")
+# --- Обробники для окремого бота-психолога (@bbig333_bot) ---
+
+@psy_router.message(Command("start"))
+async def cmd_psy_start(message: Message, state: FSMContext):
+    # Очищуємо старий стан та показуємо чисте головне меню
+    await state.clear()
+    welcome_msg = (
+        "🌿 <b>Вітаю у просторі психологічної підтримки!</b>\n\n"
+        "Я — твій особистий ШІ-Психотерапевт. Тут ти можеш поділитися своїми переживаннями, "
+        "знайти підтримку або просто виговоритись у конфіденційному форматі.\n\n"
+        "Оберіть дію нижче 👇"
+    )
+    await message.answer(
+        welcome_msg, 
+        reply_markup=get_psy_main_keyboard(), 
+        parse_mode="HTML"
+    )
+
+@psy_router.message(F.text == "🧠 Канал Психологія")
+async def cmd_psy_channel_link(message: Message):
+    await message.answer(
+        "🌿 <b>Наш канал з психології:</b>\n\n"
+        "Тут ми публікуємо щоденні корисні думки, мотивацію та практичні поради з психології.\n\n"
+        "👉 @ncux_olo_guY (https://t.me/ncux_olo_guY)",
+        disable_web_page_preview=False,
+        parse_mode="HTML"
+    )
+
+@psy_router.message(F.text == "💬 Розпочати діалог")
+async def cmd_psy_chat_start(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    is_subbed = await check_psy_subscription(user_id)
+    if not is_subbed:
+        await message.answer(
+            "❌ <b>Тільки для підписників нашого каналу Психологія!</b>\n\n"
+            "Будь ласка, підпишись на наш канал та натисни кнопку перевірки нижче, щоб розпочати діалог з ШІ-психологом:",
+            reply_markup=get_psy_subscription_keyboard(),
+            parse_mode="HTML"
+        )
+        return
+    
+    await state.clear()
+    await state.set_state(PsyChatStates.in_chat)
+    await state.update_data(history=[])
+    
+    from aiogram.utils.keyboard import ReplyKeyboardBuilder
+    kb_builder = ReplyKeyboardBuilder()
+    kb_builder.button(text="❌ Завершити діалог")
+    
+    await message.answer(
+        "🧠 <b>Вітаю! Я твій особистий ШІ-психолог.</b>\n\n"
+        "Я тут, щоб вислухати тебе, підтримати та допомогти розібратися в твоїх емоціях.\n\n"
+        "Наш діалог є абсолютно конфіденційним. Про що ти б хотів поговорити?\n\n"
+        "<i>👉 Натисни кнопку нижче в будь-який момент, щоб завершити діалог.</i>",
+        reply_markup=kb_builder.as_markup(resize_keyboard=True),
+        parse_mode="HTML"
+    )
+
+@psy_router.callback_query(F.data == "check_psy_chat")
 async def handle_check_psy_chat_subscription(query: CallbackQuery, state: FSMContext):
     user_id = query.from_user.id
     is_subbed = await check_psy_subscription(user_id)
@@ -265,26 +307,25 @@ async def handle_successful_payment(message: Message):
 
 # --- Обработчики ШІ-Психолога ---
 
-@router.message(PsyChatStates.in_chat, F.text == "❌ Завершити діалог")
+@psy_router.message(PsyChatStates.in_chat, F.text == "❌ Завершити діалог")
 async def cmd_stop_chat(message: Message, state: FSMContext):
     await state.clear()
-    from aiogram.types import ReplyKeyboardRemove
     await message.answer(
         "🧠 <b>Діалог завершено. Сподіваюсь, наша розмова була корисною для тебе!</b>\n\n"
         "Я завжди тут, коли тобі знадобиться підтримка або захочеться виговоритись. "
         "Повертайся до нашого каналу <b>Психологія</b>🌿 у будь-який час! @ncux_olo_guY",
-        reply_markup=ReplyKeyboardRemove(),
+        reply_markup=get_psy_main_keyboard(),
         parse_mode="HTML"
     )
 
-@router.message(PsyChatStates.in_chat, F.text)
+@psy_router.message(PsyChatStates.in_chat, F.text)
 async def handle_psychologist_chat(message: Message, state: FSMContext):
     user_message = message.text.strip()
     
     state_data = await state.get_data()
     history = state_data.get("history", [])
     
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    await psy_bot.send_chat_action(chat_id=message.chat.id, action="typing")
     
     system_prompt = (
         "Ти — професійний, емпатичний та теплий практичний психотерапевт. "
@@ -436,9 +477,26 @@ async def main():
     register_commenter(client)
     print("✅ Юзербот обробники успішно зареєстровані!")
     
+    # Налаштовуємо команди для обох ботів та очищуємо старі
+    try:
+        from aiogram.types import BotCommand
+        await bot.set_my_commands([
+            BotCommand(command="start", description="Запустити бібліотеку 📚")
+        ])
+        await psy_bot.set_my_commands([
+            BotCommand(command="start", description="Розпочати діалог 🧠")
+        ])
+        print("✅ Команди для ботів успішно налаштовані!")
+    except Exception as e:
+        print(f"⚠️ Не вдалося встановити команди для ботів: {e}")
+
     # 2. Запуск Aiogram бота-бібліотекаря в цьому ж event loop!
     asyncio.create_task(dp.start_polling(bot))
     print("✅ Бот-Бібліотекар успішно запущено!")
+    
+    # Запуск Aiogram бота-психолога (@bbig333_bot) в цьому ж event loop!
+    asyncio.create_task(psy_dp.start_polling(psy_bot))
+    print("✅ Бот-Психолог успішно запущено!")
     
     # 3. Налаштовуємо розклад публікацій
     # Трейдинг
