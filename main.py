@@ -338,6 +338,9 @@ async def handle_psychologist_chat(message: Message, state: FSMContext):
     import requests
     
     api_key = getattr(config, 'GEMINI_PSY_API_KEY', config.GEMINI_API_KEY)
+    if not api_key or api_key.startswith('AQ.'):
+        api_key = config.GEMINI_API_KEY
+        
     if not api_key:
         await message.answer("⚠️ Помилка конфігурації: API-ключ не знайдено.")
         return
@@ -376,6 +379,110 @@ async def handle_psychologist_chat(message: Message, state: FSMContext):
     except Exception as e:
         print(f"Exception in Psy Chat Gemini call: {e}")
         await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати ще раз трохи пізніше.")
+
+@psy_router.message(PsyChatStates.in_chat, F.voice)
+async def handle_psychologist_voice(message: Message, state: FSMContext):
+    await psy_bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    
+    # 1. Завантаження голосового повідомлення
+    destination = f"voice_{message.from_user.id}.ogg"
+    try:
+        file_id = message.voice.file_id
+        file = await psy_bot.get_file(file_id)
+        await psy_bot.download_file(file.file_path, destination)
+    except Exception as e:
+        print(f"❌ Failed to download voice message: {e}")
+        await message.answer("⚠️ Не вдалося завантажити голосове повідомлення. Спробуйте надіслати текстове.")
+        return
+        
+    # 2. Транскрибація голосового через Groq (Whisper)
+    import requests
+    
+    url = "https://api.groq.com/openai/v1/audio/transcriptions"
+    headers = {
+        "Authorization": f"Bearer {config.GROQ_API_KEY}"
+    }
+    
+    transcribed_text = ""
+    try:
+        with open(destination, "rb") as f:
+            files = {
+                "file": (os.path.basename(destination), f, "audio/ogg")
+            }
+            data = {
+                "model": config.GROQ_MODEL,
+                "language": "uk"
+            }
+            r = requests.post(url, headers=headers, files=files, data=data, timeout=30)
+            if r.status_code == 200:
+                transcribed_text = r.json().get("text", "").strip()
+            else:
+                print(f"❌ Groq Transcription API Error: {r.status_code} - {r.text}")
+    except Exception as e:
+        print(f"❌ Exception during Groq transcription: {e}")
+    finally:
+        # Очищення тимчасового файлу
+        if os.path.exists(destination):
+            try: os.remove(destination)
+            except Exception: pass
+            
+    if not transcribed_text:
+        await message.answer("🧠 Вибачте, мені не вдалося розпізнати ваше голосове повідомлення. Спробуйте записати чіткіше або написати текстом.")
+        return
+        
+    # 3. Обробка розпізнаного тексту як звичайного повідомлення психологу
+    state_data = await state.get_data()
+    history = state_data.get("history", [])
+    
+    system_prompt = (
+        "Ти — професійний, емпатичний та теплий практичний психотерапевт. "
+        "Твоя мета — вислухати користувача, підтримати його, допомогти проаналізувати свої емоції та знизити рівень стресу. "
+        "Пиши виключно українською мовою. Спілкуйся м'яко, не давай сухих шаблонних відповідей робота. "
+        "Став відкриті запитання, використовуй активне слухання. Заборонено ставити діагнози чи виписувати ліки. "
+        "Якщо людина говорить про self-harm або критичну депресію, вислови максимальну турботу та м'яко запропонуй контакти служб підтримки."
+    )
+    
+    api_key = getattr(config, 'GEMINI_PSY_API_KEY', config.GEMINI_API_KEY)
+    if not api_key or api_key.startswith('AQ.'):
+        api_key = config.GEMINI_API_KEY
+        
+    history.append({
+        "role": "user",
+        "parts": [{"text": transcribed_text}]
+    })
+    
+    if len(history) > 12:
+        history = history[-12:]
+        
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
+    gemini_headers = {"Content-Type": "application/json"}
+    
+    payload = {
+        "contents": history,
+        "systemInstruction": {
+            "parts": [{"text": system_prompt}]
+        }
+    }
+    
+    try:
+        r = requests.post(gemini_url, headers=gemini_headers, json=payload, timeout=30)
+        if r.status_code == 200:
+            ai_reply = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            history.append({
+                "role": "model",
+                "parts": [{"text": ai_reply}]
+            })
+            await state.update_data(history=history)
+            
+            # Гарно оформляємо відповідь із цитатою користувача
+            reply_text = f"🗣️ <b>Ваше повідомлення:</b>\n<i>\"{transcribed_text}\"</i>\n\n{ai_reply}"
+            await message.answer(reply_text, parse_mode="HTML")
+        else:
+            print(f"Gemini API Error in Psy Chat Voice: {r.status_code} - {r.text}")
+            await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати або записати ще раз трохи пізніше.")
+    except Exception as e:
+        print(f"Exception in Psy Chat Voice Gemini call: {e}")
+        await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати або записати ще раз трохи пізніше.")
 
 
 # ---------------------------------------------------------------------

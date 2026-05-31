@@ -22,6 +22,8 @@ GEMINI_API_KEY = 'AIzaSyDA7jVvIIh-2KRX6hYteGfkfIWzB-Fxlzc'
 GEMINI_PSY_API_KEY = 'AQ.Ab8RN6KxsJ_Kz_S7_rv_-ZkaxOkVoB--_thX5rbFPPRAOTFQew' # Ключ для Психології
 GEMINI_AI_API_KEY = 'AQ.Ab8RN6KAbhrlG4gogPjUi8Qm5R7XEPbLhTYsyPkDHgm-bzMPKQ'  # Ключ для ШІ
 PSY_BOT_TOKEN = '6557362587:AAHmNbPuhKI9swW96m7ou4B-4fBhcuzVbdI' # Бот-психолог (@bbig333_bot)
+GROQ_API_KEY = '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' # Ключ для Groq (Whisper)
+GROQ_MODEL = 'whisper-large-v3-turbo' # Модель транскрибації
 
 # ---------------------------------------------------------------------
 # 4. Проект "СІМ СОРОК" (Трейдинг & Фінанси)
