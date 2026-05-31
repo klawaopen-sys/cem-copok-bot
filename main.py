@@ -474,9 +474,7 @@ async def handle_psychologist_voice(message: Message, state: FSMContext):
             })
             await state.update_data(history=history)
             
-            # Гарно оформляємо відповідь із цитатою користувача
-            reply_text = f"🗣️ <b>Ваше повідомлення:</b>\n<i>\"{transcribed_text}\"</i>\n\n{ai_reply}"
-            await message.answer(reply_text, parse_mode="HTML")
+            await message.answer(ai_reply, parse_mode="HTML")
         else:
             print(f"Gemini API Error in Psy Chat Voice: {r.status_code} - {r.text}")
             await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати або записати ще раз трохи пізніше.")
