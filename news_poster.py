@@ -11,6 +11,7 @@ from datetime import datetime
 from crypto_parser import apply_referral_links
 from PIL import Image, ImageDraw, ImageFont
 import re
+import base64
 
 
 # ---------------------------------------------------------------------
@@ -147,6 +148,8 @@ async def get_latest_ai_posts(client):
 def select_and_rewrite_ai_with_gemini(news_list, category_name):
     """Запитує у Gemini рерайт ШІ-поста під конкретну тематику"""
     api_key = getattr(config, 'GEMINI_AI_API_KEY', config.GEMINI_API_KEY)
+    if not api_key or api_key.startswith('AQ.'):
+        api_key = config.GEMINI_API_KEY
     if not api_key:
         return None, None
 
@@ -311,9 +314,10 @@ def apply_brand_frame(photo_path, channel_type):
         tag_w = text_w + padding_x * 2
         tag_h = text_h + padding_y * 2
         
-        tag_x1 = width - border_width - tag_w - int(width * 0.02)
+        # Tag placement: bottom-left corner
+        tag_x1 = border_width + int(width * 0.02)
         tag_y1 = height - border_width - tag_h - int(height * 0.02)
-        tag_x2 = width - border_width - int(width * 0.02)
+        tag_x2 = border_width + tag_w + int(width * 0.02)
         tag_y2 = height - border_width - int(height * 0.02)
         
         draw_rounded_rectangle(draw, [tag_x1, tag_y1, tag_x2, tag_y2], radius=int(tag_h * 0.25), fill=tag_bg)
@@ -333,11 +337,19 @@ def apply_brand_frame(photo_path, channel_type):
         if os.path.exists(logo_file):
             try:
                 logo = Image.open(logo_file).convert("RGBA")
+                
+                # Make it semi-transparent (45% opacity)
+                opacity = 0.45
+                alpha = logo.split()[3]
+                alpha = alpha.point(lambda p: int(p * opacity))
+                logo.putalpha(alpha)
+                
                 logo_size = int(width * 0.08)
                 logo = logo.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
                 
-                logo_x = border_width + int(width * 0.015)
-                logo_y = border_width + int(height * 0.015)
+                # Logo placement: bottom-right corner
+                logo_x = width - border_width - logo_size - int(width * 0.02)
+                logo_y = height - border_width - logo_size - int(height * 0.02)
                 
                 if channel_type in ['psy', 'ai']:
                     overlay.paste(logo, (logo_x, logo_y), mask=logo)
@@ -349,7 +361,7 @@ def apply_brand_frame(photo_path, channel_type):
                     circular_logo = Image.new("RGBA", (logo_size, logo_size), (0, 0, 0, 0))
                     circular_logo.paste(logo, (0, 0), mask=mask)
                     
-                    overlay.paste(circular_logo, (logo_x, logo_y))
+                    overlay.paste(circular_logo, (logo_x, logo_y), mask=circular_logo)
             except Exception as le:
                 print(f"⚠️ Logo watermark error: {le}")
 
@@ -361,6 +373,66 @@ def apply_brand_frame(photo_path, channel_type):
     except Exception as e:
         print(f"⚠️ Error applying brand frame: {e}")
         return False
+
+def contains_russian_text(image_path):
+    """
+    Uses Gemini to analyze if the image contains any Russian text.
+    Returns True if Russian text is present, False otherwise.
+    """
+    if not image_path or not os.path.exists(image_path):
+        return False
+        
+    api_key = config.GEMINI_API_KEY
+    if not api_key:
+        print("⚠️ Gemini key not found for OCR check.")
+        return False
+        
+    try:
+        with open(image_path, "rb") as f:
+            image_data = base64.b64encode(f.read()).decode("utf-8")
+            
+        mime_type = "image/png" if image_path.lower().endswith(".png") else "image/jpeg"
+        
+        prompt = (
+            "Analyze this image carefully. Your task is to detect if there is any visible text or writing on the image, "
+            "and determine if any of that text is in the Russian language (written in Cyrillic, using Russian words like 'да', 'и', 'чего', 'криндж', 'сломался', etc.).\n\n"
+            "Return ONLY 'YES' if Russian text is present on the image, or 'NO' if there is no text or the text is in English, Ukrainian, or any other language.\n"
+            "Do not write any other words, explanations, or markdown. Only output 'YES' or 'NO'."
+        )
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        headers = {"Content-Type": "application/json"}
+        
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "inlineData": {
+                                "mimeType": mime_type,
+                                "data": image_data
+                            }
+                        },
+                        {
+                            "text": prompt
+                        }
+                    ]
+                }
+            ]
+        }
+        
+        print(f"👁️ Sending image to Gemini for Russian text detection (OCR)...")
+        r = requests.post(url, headers=headers, json=payload, timeout=25)
+        if r.status_code == 200:
+            result = r.json()['candidates'][0]['content']['parts'][0]['text'].strip().upper()
+            print(f"🔍 Gemini OCR result: {result}")
+            return "YES" in result
+        else:
+            print(f"⚠️ Gemini OCR API error: {r.status_code} - {r.text}")
+    except Exception as e:
+        print(f"❌ Error during contains_russian_text OCR: {e}")
+        
+    return False
 
 async def generate_ai_image(post_text, channel_type, save_path):
     """
@@ -375,6 +447,9 @@ async def generate_ai_image(post_text, channel_type, save_path):
         api_key = getattr(config, 'GEMINI_AI_API_KEY', config.GEMINI_API_KEY)
     elif channel_type == 'psy':
         api_key = getattr(config, 'GEMINI_PSY_API_KEY', config.GEMINI_API_KEY)
+        
+    if not api_key or api_key.startswith('AQ.'):
+        api_key = config.GEMINI_API_KEY
         
     if not api_key:
         print("⚠️ Gemini API key not found. Skipping image generation.")
@@ -510,6 +585,8 @@ async def fill_daily_queue(client):
     except Exception as e:
         print(f"⚠️ Error fetching AI posts for queue: {e}")
 
+    used_donor_posts = set()
+
     for cat in ai_categories:
         if ('ai', cat) in existing_pending:
             print(f"⏭️ AI slot '{cat}' already has a pending post. Skipping.")
@@ -518,9 +595,18 @@ async def fill_daily_queue(client):
         if not ai_posts:
             continue
             
+        # Filter out already used candidates in the same run to prevent duplicate images/sources
+        candidates = [item for item in ai_posts if (item['channel'], item['message_id']) not in used_donor_posts]
+        if not candidates:
+            print(f"⚠️ No fresh AI candidates left for slot '{cat}'.")
+            continue
+            
         print(f"📦 Preparing AI post for category '{cat}'...")
-        post_text, chosen_item, extracted_prompt = select_and_rewrite_ai_with_gemini(ai_posts, cat)
-        if post_text:
+        post_text, chosen_item, extracted_prompt = select_and_rewrite_ai_with_gemini(candidates, cat)
+        if post_text and chosen_item:
+            # Mark candidate as used
+            used_donor_posts.add((chosen_item['channel'], chosen_item['message_id']))
+            
             final_text = post_text
             if extracted_prompt:
                 final_text += f"\n\n📋 <b>Промпт для генерації:</b>\n<code>{extracted_prompt}</code>"
@@ -533,8 +619,15 @@ async def fill_daily_queue(client):
                 if chosen_item and chosen_item["has_photo"]:
                     try:
                         photo_filename = await client.download_media(chosen_item["message_obj"], file=photo_filename)
-                        apply_brand_frame(photo_filename, "ai")
-                        img_ok = True
+                        if contains_russian_text(photo_filename):
+                            print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
+                            try: os.remove(photo_filename)
+                            except Exception: pass
+                            photo_filename = f"media_queue/ai_{next_id}.jpg"
+                            img_ok = await generate_ai_image(final_text, "ai", photo_filename)
+                        else:
+                            apply_brand_frame(photo_filename, "ai")
+                            img_ok = True
                     except Exception:
                         photo_filename = ""
                 else:
@@ -562,9 +655,18 @@ async def fill_daily_queue(client):
         if not psy_posts:
             continue
             
+        # Filter out already used candidates in the same run to prevent duplicate images/sources
+        candidates = [item for item in psy_posts if (item['channel'], item['message_id']) not in used_donor_posts]
+        if not candidates:
+            print(f"⚠️ No fresh PSY candidates left for slot '{cat}'.")
+            continue
+            
         print(f"📦 Preparing PSY post for category '{cat}'...")
-        post_text, chosen_item = select_and_rewrite_psy_with_gemini(psy_posts, cat)
-        if post_text:
+        post_text, chosen_item = select_and_rewrite_psy_with_gemini(candidates, cat)
+        if post_text and chosen_item:
+            # Mark candidate as used
+            used_donor_posts.add((chosen_item['channel'], chosen_item['message_id']))
+            
             final_text = auto_replace_links(post_text)
             photo_filename = f"media_queue/psy_{next_id}.jpg"
             
@@ -573,8 +675,15 @@ async def fill_daily_queue(client):
                 if chosen_item and chosen_item["has_photo"]:
                     try:
                         photo_filename = await client.download_media(chosen_item["message_obj"], file=photo_filename)
-                        apply_brand_frame(photo_filename, "psy")
-                        img_ok = True
+                        if contains_russian_text(photo_filename):
+                            print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
+                            try: os.remove(photo_filename)
+                            except Exception: pass
+                            photo_filename = f"media_queue/psy_{next_id}.jpg"
+                            img_ok = await generate_ai_image(final_text, "psy", photo_filename)
+                        else:
+                            apply_brand_frame(photo_filename, "psy")
+                            img_ok = True
                     except Exception:
                         photo_filename = ""
                 else:
@@ -624,8 +733,15 @@ async def post_news_report(client):
             if chosen_item and chosen_item["has_photo"]:
                 try:
                     photo_path = await client.download_media(chosen_item["message_obj"], file="news_photo.jpg")
-                    apply_brand_frame(photo_path, "trading")
-                    generated_ok = True
+                    if contains_russian_text(photo_path):
+                        print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
+                        try: os.remove(photo_path)
+                        except Exception: pass
+                        photo_path = "news_photo.jpg"
+                        generated_ok = await generate_ai_image(post_text, "trading", photo_path)
+                    else:
+                        apply_brand_frame(photo_path, "trading")
+                        generated_ok = True
                 except Exception as e:
                     print(f"⚠️ Помилка скачування оригінальної картинки: {e}")
                     photo_path = None
@@ -745,8 +861,15 @@ async def post_ai_category_update(client, category_name):
             if chosen_item and chosen_item["has_photo"]:
                 try:
                     photo_path = await client.download_media(chosen_item["message_obj"], file="temp_ai_post.jpg")
-                    apply_brand_frame(photo_path, "ai")
-                    generated_ok = True
+                    if contains_russian_text(photo_path):
+                        print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
+                        try: os.remove(photo_path)
+                        except Exception: pass
+                        photo_path = "temp_ai_post.jpg"
+                        generated_ok = await generate_ai_image(final_post_text, "ai", photo_path)
+                    else:
+                        apply_brand_frame(photo_path, "ai")
+                        generated_ok = True
                 except Exception as e:
                     print(f"⚠️ Помилка скачування оригінальної картинки: {e}")
                     photo_path = None
@@ -954,6 +1077,8 @@ async def get_latest_psy_posts(client):
 def select_and_rewrite_psy_with_gemini(news_list, category_name):
     """Запитує у Gemini рерайт психологічного поста під конкретну тематику"""
     api_key = getattr(config, 'GEMINI_PSY_API_KEY', config.GEMINI_API_KEY)
+    if not api_key or api_key.startswith('AQ.'):
+        api_key = config.GEMINI_API_KEY
     if not api_key:
         return None, None
 
@@ -1082,8 +1207,15 @@ async def post_psy_category_update(client, category_name):
             if chosen_item and chosen_item["has_photo"]:
                 try:
                     photo_path = await client.download_media(chosen_item["message_obj"], file="temp_psy_post.jpg")
-                    apply_brand_frame(photo_path, "psy")
-                    generated_ok = True
+                    if contains_russian_text(photo_path):
+                        print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
+                        try: os.remove(photo_path)
+                        except Exception: pass
+                        photo_path = "temp_psy_post.jpg"
+                        generated_ok = await generate_ai_image(final_post_text, "psy", photo_path)
+                    else:
+                        apply_brand_frame(photo_path, "psy")
+                        generated_ok = True
                 except Exception as e:
                     print(f"⚠️ Помилка скачування оригінальної картинки: {e}")
                     photo_path = None

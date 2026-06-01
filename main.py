@@ -606,10 +606,12 @@ async def main():
         print(f"⚠️ Не вдалося встановити команди для ботів: {e}")
 
     # 2. Запуск Aiogram бота-бібліотекаря в цьому ж event loop!
+    await bot.delete_webhook(drop_pending_updates=True)
     asyncio.create_task(dp.start_polling(bot))
     print("✅ Бот-Бібліотекар успішно запущено!")
     
     # Запуск Aiogram бота-психолога (@bbig333_bot) в цьому ж event loop!
+    await psy_bot.delete_webhook(drop_pending_updates=True)
     asyncio.create_task(psy_dp.start_polling(psy_bot))
     print("✅ Бот-Психолог успішно запущено!")
     
