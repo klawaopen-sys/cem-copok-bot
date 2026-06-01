@@ -63,9 +63,11 @@ def select_and_rewrite_news_with_gemini(news_items):
         "2. Напиши професійний, захоплюючий рерайт цієї новини українською мовою.\n"
         "3. Пост має бути лаконічним, чітким і СТРОГО до 600-650 символів (разом із пробілами), структурованим (використовуй абзаци, емодзі). Не пиши занадто розлогих текстів!\n"
         "4. КРИТИЧНО: Пиши бездоганною, природною українською мовою без русизмів чи кальок з англійської. Наприклад, 'stickers from a photo' перекладай виключно як 'стікери з фото' (використовуй прийменник 'з' для позначення джерела/походження, а не 'за', що означає плату або обмін). Текст має бути стилістично ідеально відшліфованим.\n"
-        "5. ВАЖЛИВО: Використовуй ТІЛЬКИ HTML-теги для виділення жирного тексту: <b>текст</b> та </b>. НІКОЛИ не використовуй маркдаун зі зірочками (типу **текст** або *текст*).\n"
-        "6. В кінці поста додай тематичні хештеги.\n"
-        "7. Золоте правило: у НАЙПЕРШОМУ рядку своєї відповіді напиши ТІЛЬКИ індекс обраного кандидата у форматі 'INDEX: X' (наприклад, 'INDEX: 3'), а далі з нового рядка пиши текст самого поста.\n\n"
+        "5. КРИТИЧНО: Якщо в тексті згадуються теми штучного інтелекту, нейромереж чи ШІ-інструментів, обов'язково зроби красиве текстове відсилання-посилання на наш партнерський канал про штучний інтелект: @te_shoo_treba (наприклад, 'дізнатися більше можна в <b><a href=\"https://t.me/te_shoo_treba\">Те що треба | AI</a></b>'). "
+        "Якщо в тексті згадується психологія, стрес, емоції чи ментальне здоров'я, зроби красиве відсилання на наш партнерський канал про психологію: @ncux_olo_guY (наприклад, 'підтримати ментальне здоров\\'я допоможе <b><a href=\"https://t.me/ncux_olo_guY\">Нейро-Апгрейд</a></b>').\n"
+        "6. ВАЖЛИВО: Використовуй ТІЛЬКИ HTML-теги для виділення жирного тексту: <b>текст</b> та </b>. НІКОЛИ не використовуй маркдаун зі зірочками (типу **текст** або *текст*).\n"
+        "7. В кінці поста додай тематичні хештеги.\n"
+        "8. Золоте правило: у НАЙПЕРШОМУ рядку своєї відповіді напиши ТІЛЬКИ індекс обраного кандидата у форматі 'INDEX: X' (наприклад, 'INDEX: 3'), а далі з нового рядка пиши текст самого поста.\n\n"
         "Почни відповідь з 'INDEX: X' та пиши виключно українською мовою з використанням HTML-форматування <b>...</b> для жирного тексту."
     )
 
@@ -91,7 +93,9 @@ def select_and_rewrite_news_with_gemini(news_items):
                     pass
             
             chosen_item = news_items[chosen_index] if chosen_index < len(news_items) else news_items[0]
+            post_text = sanitize_post_text(post_text, 'trading')
             return post_text, chosen_item
+
     except Exception as e:
         print(f"Помилка генерації новин трейдингу через Gemini: {e}")
     return None, None
@@ -508,10 +512,106 @@ async def generate_ai_image(post_text, channel_type, save_path):
     return False
 
 
+def get_used_donors_worksheet():
+    import gspread
+    from google.oauth2.service_account import Credentials
+    
+    SCOPES = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = Credentials.from_service_account_file(config.GOOGLE_CREDENTIALS_FILE, scopes=SCOPES)
+    gc = gspread.authorize(creds)
+    sh = gc.open_by_key(config.GOOGLE_SHEET_ID)
+    
+    try:
+        ws = sh.worksheet('USED_DONORS')
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title='USED_DONORS', rows='10000', cols='3')
+        headers = ["donor_channel", "message_id", "used_at"]
+        ws.append_row(headers)
+    return ws
+
+def get_used_donors():
+    """Повертає set кортежів (donor_channel, message_id) вже використаних донорських постів."""
+    try:
+        ws = get_used_donors_worksheet()
+        rows = ws.get_all_values()
+        used = set()
+        if len(rows) > 1:
+            for row in rows[1:]:
+                if len(row) >= 2:
+                    used.add((str(row[0]).strip(), str(row[1]).strip()))
+        return used
+    except Exception as e:
+        print(f"⚠️ Помилка читання листа USED_DONORS: {e}")
+        return set()
+
+def mark_donor_as_used(donor_channel, message_id):
+    """Додає новий рядок у лист USED_DONORS для позначення поста як використаного."""
+    try:
+        ws = get_used_donors_worksheet()
+        now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
+        ws.append_row([str(donor_channel), str(message_id), now_str])
+        print(f"✅ Донорський пост @{donor_channel} ID {message_id} позначено як використаний.")
+    except Exception as e:
+        print(f"⚠️ Помилка запису в USED_DONORS: {e}")
+
+def is_ad_or_invalid_psy_post(text):
+    if not text:
+        return True
+    text_lower = text.lower()
+    # Маркери рекламних постів
+    ad_keywords = [
+        "реклама", "промокод", "скидка", "снижка", "акція", "акция", 
+        "купить", "придбати", "ціна", "цена", "подписывайтесь", "підписуйтесь",
+        "канал", "чат", "переходи", "жми", "клик", "click", "подпишись", "підпишись",
+        "запис на", "консультація", "платна"
+    ]
+    for kw in ad_keywords:
+        if kw in text_lower:
+            return True
+            
+    # Перевіряємо посилання t.me на інші канали
+    telegram_links = re.findall(r't\.me/([a-zA-Z0-9_]+)', text_lower)
+    for link in telegram_links:
+        if link.lower() not in ['ncux_olo_guy', 'cem_copok', 'te_shoo_treba', 'librar_ian_bot', 'l_ibrar_y', 'bbig333_bot']:
+            return True
+    return False
+
+def sanitize_post_text(text, channel_type):
+    """Замінює будь-які сторонні згадки/посилання на наші власні ресурси."""
+    if not text:
+        return text
+        
+    allowed_handles = ['cem_copok', 'ncux_olo_guy', 'te_shoo_treba', 'librar_ian_bot', 'l_ibrar_y', 'bbig333_bot']
+    
+    def replace_mention(match):
+        handle = match.group(1)
+        if handle.lower() in allowed_handles:
+            return f"@{handle}"
+        else:
+            if channel_type == 'psy': return "@ncux_olo_guY"
+            elif channel_type == 'ai': return "@te_shoo_treba"
+            else: return "@cem_copok"
+                
+    text = re.sub(r'@([a-zA-Z0-9_]+)', replace_mention, text)
+    
+    def replace_tme_link(match):
+        full_url = match.group(0)
+        handle = match.group(1)
+        if handle.lower() in allowed_handles:
+            return full_url
+        else:
+            if channel_type == 'psy': return "https://t.me/ncux_olo_guY"
+            elif channel_type == 'ai': return "https://t.me/te_shoo_treba"
+            else: return "https://t.me/cem_copok"
+                
+    text = re.sub(r'https?://t\.me/([a-zA-Z0-9_]+)', replace_tme_link, text)
+    return text
+
 def auto_replace_links(text):
     if not text: return text
     pattern = r'https?://t\.me/l_ibrar_y/(\d+)'
     return re.sub(pattern, r'https://t.me/librar_ian_bot?start=\1', text)
+
 
 def get_posts_queue_worksheet():
     import gspread
@@ -1054,25 +1154,27 @@ PSY_CATEGORIES = {
 }
 
 async def get_latest_psy_posts(client):
-    """Збирає останні пости з психології з каналів-донорів"""
+    """Збирає якісні корисні пости з психології з глибини історії каналів-донорів"""
     news_list = []
-    print("📥 Збираю свіжі пости з каналів-донорів психології...")
+    print("📥 Збираю корисні пости з глибини історії психології...")
     for channel in PSY_CHANNELS:
         try:
-            print(f"📡 Зчитую канал @{channel}...")
-            async for message in client.iter_messages(channel, limit=4):
+            print(f"📡 Зчитую канал @{channel} (до 150 постів)...")
+            async for message in client.iter_messages(channel, limit=150):
                 text = message.text or message.message
-                if text and len(text.strip()) > 30:
-                    news_list.append({
-                        "channel": channel,
-                        "message_id": message.id,
-                        "text": text.strip(),
-                        "has_photo": bool(message.photo),
-                        "message_obj": message
-                    })
+                if text and len(text.strip()) > 50:
+                    if not is_ad_or_invalid_psy_post(text):
+                        news_list.append({
+                            "channel": channel,
+                            "message_id": message.id,
+                            "text": text.strip(),
+                            "has_photo": bool(message.photo),
+                            "message_obj": message
+                        })
         except Exception as e:
             print(f"⚠️ Не вдалося зчитати канал @{channel}: {e}")
     return news_list
+
 
 def select_and_rewrite_psy_with_gemini(news_list, category_name):
     """Запитує у Gemini рерайт психологічного поста під конкретну тематику"""

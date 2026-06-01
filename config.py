@@ -75,8 +75,8 @@ PSY_DONOR_CHANNELS = [
     'TheMentalHealthSchool',     # Школа психологического просвещения
     'post_trevoga',              # пост_тревога
     'Psihologiya_samorazvitie',  # Психология саморазвитие
-    'mentalpie',                 # Ментальный пирог
-    'dianalysis'                 # Дневник психотерапевта
+    'volna_cc',                 # Море волнуется, а ты — нет
+         
 ]
 
 # Тайм-слоти для публікацій Психології (Нейро-Апгрейд)
@@ -107,6 +107,8 @@ AI_DONOR_CHANNELS = [
     'techcrunch',
     'ai_tools',
     'AI_to_business'
+    'TochkiNadAI'
+    '+frtm7Hh88ss1NDBh'
 ]
 
 # Сигнатура з посиланням на бібліотекаря в кінці постів ІИ
