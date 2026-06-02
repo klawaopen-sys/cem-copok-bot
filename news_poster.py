@@ -492,16 +492,24 @@ async def generate_ai_image(post_text, channel_type, save_path):
             encoded_prompt = urllib.parse.quote(gemini_prompt)
             gen_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
             
-            print(f"🚀 Generating image via Pollinations.ai (Flux)...")
-            img_resp = requests.get(gen_url, timeout=45)
-            if img_resp.status_code == 200:
-                with open(save_path, "wb") as f:
-                    f.write(img_resp.content)
-                print("💾 Image successfully generated and saved!")
-                apply_brand_frame(save_path, channel_type)
-                return True
-            else:
-                print(f"⚠️ Pollinations API error: {img_resp.status_code}")
+            for attempt in range(1, 4):
+                try:
+                    print(f"🚀 Generating image via Pollinations.ai (Flux) (Attempt {attempt}/3)...")
+                    img_resp = requests.get(gen_url, timeout=45)
+                    if img_resp.status_code == 200:
+                        with open(save_path, "wb") as f:
+                            f.write(img_resp.content)
+                        print("💾 Image successfully generated and saved!")
+                        apply_brand_frame(save_path, channel_type)
+                        return True
+                    else:
+                        print(f"⚠️ Pollinations API error (Attempt {attempt}/3): {img_resp.status_code}")
+                except Exception as e:
+                    print(f"❌ Failed to generate AI image (Attempt {attempt}/3): {e}")
+                
+                if attempt < 3:
+                    print("⏳ Waiting 5 seconds before retrying...")
+                    await asyncio.sleep(5)
         else:
             print(f"⚠️ Gemini API error during prompt generation: {r.status_code}")
     except Exception as e:
@@ -628,12 +636,12 @@ def get_posts_queue_worksheet():
         ws.append_row(headers)
     return ws
 
-async def fill_daily_queue(client):
+async def fill_daily_queue(client, channel_filter="all"):
     """
     Called once a day (at night, e.g. 03:00) to populate the POSTS_QUEUE 
     for the next 24 hours. Pre-generates and pre-frames AI images.
     """
-    print("🌙 [QUEUE] Starting nightly queue population...")
+    print(f"🌙 [QUEUE] Starting nightly queue population (Filter: {channel_filter})...")
     os.makedirs("media_queue", exist_ok=True)
     
     ws = get_posts_queue_worksheet()
@@ -665,8 +673,6 @@ async def fill_daily_queue(client):
         except Exception:
             next_id = len(data)
 
-    # 2. Check and fill AI slots
-    ai_categories = ["AI News & Web3 Tech", "AI Productivity & Work", "AI Finance & Dev Tools", "AI Media & Creative"]
     existing_pending = {}
     if len(data) > 1:
         for row in data[1:]:
@@ -675,129 +681,132 @@ async def fill_daily_queue(client):
                 existing_pending[(chan, cat)] = True
 
     now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
-
-    # Fetch AI candidates once
-    ai_posts = []
-    try:
-        ai_posts = await get_latest_ai_posts(client)
-    except Exception as e:
-        print(f"⚠️ Error fetching AI posts for queue: {e}")
-
     used_donor_posts = set()
 
-    for cat in ai_categories:
-        if ('ai', cat) in existing_pending:
-            print(f"⏭️ AI slot '{cat}' already has a pending post. Skipping.")
-            continue
-            
-        if not ai_posts:
-            continue
-            
-        # Filter out already used candidates in the same run to prevent duplicate images/sources
-        candidates = [item for item in ai_posts if (item['channel'], item['message_id']) not in used_donor_posts]
-        if not candidates:
-            print(f"⚠️ No fresh AI candidates left for slot '{cat}'.")
-            continue
-            
-        print(f"📦 Preparing AI post for category '{cat}'...")
-        post_text, chosen_item, extracted_prompt = select_and_rewrite_ai_with_gemini(candidates, cat)
-        if post_text and chosen_item:
-            # Mark candidate as used
-            used_donor_posts.add((chosen_item['channel'], chosen_item['message_id']))
-            
-            final_text = post_text
-            if extracted_prompt:
-                final_text += f"\n\n📋 <b>Промпт для генерації:</b>\n<code>{extracted_prompt}</code>"
+    # 2. Check and fill AI slots
+    if channel_filter in ["ai", "all"]:
+        ai_categories = ["AI News & Web3 Tech", "AI Productivity & Work", "AI Finance & Dev Tools", "AI Media & Creative"]
+        # Fetch AI candidates once
+        ai_posts = []
+        try:
+            ai_posts = await get_latest_ai_posts(client)
+        except Exception as e:
+            print(f"⚠️ Error fetching AI posts for queue: {e}")
+
+        for cat in ai_categories:
+            if ('ai', cat) in existing_pending:
+                print(f"⏭️ AI slot '{cat}' already has a pending post. Skipping.")
+                continue
                 
-            final_text = auto_replace_links(final_text)
-            
-            photo_filename = f"media_queue/ai_{next_id}.jpg"
-            img_ok = await generate_ai_image(final_text, "ai", photo_filename)
-            if not img_ok:
-                if chosen_item and chosen_item["has_photo"]:
-                    try:
-                        photo_filename = await client.download_media(chosen_item["message_obj"], file=photo_filename)
-                        if contains_russian_text(photo_filename):
-                            print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
-                            try: os.remove(photo_filename)
-                            except Exception: pass
-                            photo_filename = f"media_queue/ai_{next_id}.jpg"
-                            img_ok = await generate_ai_image(final_text, "ai", photo_filename)
-                        else:
-                            apply_brand_frame(photo_filename, "ai")
-                            img_ok = True
-                    except Exception:
+            if not ai_posts:
+                continue
+                
+            # Filter out already used candidates in the same run to prevent duplicate images/sources
+            candidates = [item for item in ai_posts if (item['channel'], item['message_id']) not in used_donor_posts]
+            if not candidates:
+                print(f"⚠️ No fresh AI candidates left for slot '{cat}'.")
+                continue
+                
+            print(f"📦 Preparing AI post for category '{cat}'...")
+            post_text, chosen_item, extracted_prompt = select_and_rewrite_ai_with_gemini(candidates, cat)
+            if post_text and chosen_item:
+                # Mark candidate as used
+                used_donor_posts.add((chosen_item['channel'], chosen_item['message_id']))
+                
+                final_text = post_text
+                if extracted_prompt:
+                    final_text += f"\n\n📋 <b>Промпт для генерації:</b>\n<code>{extracted_prompt}</code>"
+                    
+                final_text = auto_replace_links(final_text)
+                
+                photo_filename = f"media_queue/ai_{next_id}.jpg"
+                img_ok = await generate_ai_image(final_text, "ai", photo_filename)
+                if not img_ok:
+                    if chosen_item and chosen_item["has_photo"]:
+                        try:
+                            photo_filename = await client.download_media(chosen_item["message_obj"], file=photo_filename)
+                            if contains_russian_text(photo_filename):
+                                print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
+                                try: os.remove(photo_filename)
+                                except Exception: pass
+                                photo_filename = f"media_queue/ai_{next_id}.jpg"
+                                img_ok = await generate_ai_image(final_text, "ai", photo_filename)
+                            else:
+                                apply_brand_frame(photo_filename, "ai")
+                                img_ok = True
+                        except Exception:
+                            photo_filename = ""
+                    else:
                         photo_filename = ""
-                else:
-                    photo_filename = ""
-            
-            row = [str(next_id), "ai", cat, final_text, photo_filename if img_ok else "", "pending", now_str, "", ""]
-            ws.append_row(row)
-            print(f"✅ AI post '{cat}' queued with ID {next_id}!")
-            next_id += 1
-            await asyncio.sleep(2.0)
+                
+                row = [str(next_id), "ai", cat, final_text, photo_filename if img_ok else "", "pending", now_str, "", ""]
+                ws.append_row(row)
+                print(f"✅ AI post '{cat}' queued with ID {next_id}!")
+                next_id += 1
+                await asyncio.sleep(2.0)
 
     # 3. Check and fill PSY slots
-    psy_categories = ["Morning Motivation", "Practical Psychology", "Mindfulness & Relationships"]
-    psy_posts = []
-    try:
-        psy_posts = await get_latest_psy_posts(client)
-    except Exception as e:
-        print(f"⚠️ Error fetching PSY posts for queue: {e}")
+    if channel_filter in ["psy", "all"]:
+        psy_categories = ["Morning Motivation", "Practical Psychology", "Mindfulness & Relationships"]
+        psy_posts = []
+        try:
+            psy_posts = await get_latest_psy_posts(client)
+        except Exception as e:
+            print(f"⚠️ Error fetching PSY posts for queue: {e}")
 
-    for cat in psy_categories:
-        if ('psy', cat) in existing_pending:
-            print(f"⏭️ PSY slot '{cat}' already has a pending post. Skipping.")
-            continue
-            
-        if not psy_posts:
-            continue
-            
-        # Filter out already used candidates in the same run to prevent duplicate images/sources
-        candidates = [item for item in psy_posts if (item['channel'], item['message_id']) not in used_donor_posts]
-        if not candidates:
-            print(f"⚠️ No fresh PSY candidates left for slot '{cat}'.")
-            continue
-            
-        print(f"📦 Preparing PSY post for category '{cat}'...")
-        post_text, chosen_item = select_and_rewrite_psy_with_gemini(candidates, cat)
-        if post_text and chosen_item:
-            # Mark candidate as used
-            used_donor_posts.add((chosen_item['channel'], chosen_item['message_id']))
-            
-            final_text = auto_replace_links(post_text)
-            photo_filename = f"media_queue/psy_{next_id}.jpg"
-            
-            img_ok = await generate_ai_image(final_text, "psy", photo_filename)
-            if not img_ok:
-                if chosen_item and chosen_item["has_photo"]:
-                    try:
-                        photo_filename = await client.download_media(chosen_item["message_obj"], file=photo_filename)
-                        if contains_russian_text(photo_filename):
-                            print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
-                            try: os.remove(photo_filename)
-                            except Exception: pass
-                            photo_filename = f"media_queue/psy_{next_id}.jpg"
-                            img_ok = await generate_ai_image(final_text, "psy", photo_filename)
-                        else:
-                            apply_brand_frame(photo_filename, "psy")
-                            img_ok = True
-                    except Exception:
+        for cat in psy_categories:
+            if ('psy', cat) in existing_pending:
+                print(f"⏭️ PSY slot '{cat}' already has a pending post. Skipping.")
+                continue
+                
+            if not psy_posts:
+                continue
+                
+            # Filter out already used candidates in the same run to prevent duplicate images/sources
+            candidates = [item for item in psy_posts if (item['channel'], item['message_id']) not in used_donor_posts]
+            if not candidates:
+                print(f"⚠️ No fresh PSY candidates left for slot '{cat}'.")
+                continue
+                
+            print(f"📦 Preparing PSY post for category '{cat}'...")
+            post_text, chosen_item = select_and_rewrite_psy_with_gemini(candidates, cat)
+            if post_text and chosen_item:
+                # Mark candidate as used
+                used_donor_posts.add((chosen_item['channel'], chosen_item['message_id']))
+                
+                final_text = auto_replace_links(post_text)
+                photo_filename = f"media_queue/psy_{next_id}.jpg"
+                
+                img_ok = await generate_ai_image(final_text, "psy", photo_filename)
+                if not img_ok:
+                    if chosen_item and chosen_item["has_photo"]:
+                        try:
+                            photo_filename = await client.download_media(chosen_item["message_obj"], file=photo_filename)
+                            if contains_russian_text(photo_filename):
+                                print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
+                                try: os.remove(photo_filename)
+                                except Exception: pass
+                                photo_filename = f"media_queue/psy_{next_id}.jpg"
+                                img_ok = await generate_ai_image(final_text, "psy", photo_filename)
+                            else:
+                                apply_brand_frame(photo_filename, "psy")
+                                img_ok = True
+                        except Exception:
+                            photo_filename = ""
+                    else:
                         photo_filename = ""
-                else:
-                    photo_filename = ""
-                    
-            if not img_ok and cat == "Morning Motivation" and os.path.exists("psy_default.png"):
-                import shutil
-                shutil.copy("psy_default.png", photo_filename)
-                apply_brand_frame(photo_filename, "psy")
-                img_ok = True
+                        
+                if not img_ok and cat == "Morning Motivation" and os.path.exists("psy_default.png"):
+                    import shutil
+                    shutil.copy("psy_default.png", photo_filename)
+                    apply_brand_frame(photo_filename, "psy")
+                    img_ok = True
 
-            row = [str(next_id), "psy", cat, final_text, photo_filename if img_ok else "", "pending", now_str, "", ""]
-            ws.append_row(row)
-            print(f"✅ PSY post '{cat}' queued with ID {next_id}!")
-            next_id += 1
-            await asyncio.sleep(2.0)
+                row = [str(next_id), "psy", cat, final_text, photo_filename if img_ok else "", "pending", now_str, "", ""]
+                ws.append_row(row)
+                print(f"✅ PSY post '{cat}' queued with ID {next_id}!")
+                next_id += 1
+                await asyncio.sleep(2.0)
             
     print("🌅 [QUEUE] Nightly queue population finished successfully!")
 
@@ -1373,6 +1382,55 @@ async def post_psy_category_update(client, category_name):
 # ---------------------------------------------------------------------
 # Д. Інтерфейс запуску з main.py
 # ---------------------------------------------------------------------
+async def check_and_regenerate_missing_images(client, channel_type, category_name):
+    """
+    Вызывается за 20 минут до публикации поста.
+    Проверяет, сгенерирована ли картинка. Если нет — запускает генерацию.
+    """
+    print(f"🔍 [CONTROL CHECK] Checking image for '{channel_type}' - '{category_name}' (20 mins before post)...")
+    try:
+        ws = get_posts_queue_worksheet()
+        rows = ws.get_all_values()
+        
+        queued_post = None
+        row_idx = -1
+        
+        if len(rows) > 1:
+            for idx, row in enumerate(rows[1:], start=2):
+                if len(row) > 5 and row[1] == channel_type and row[2] == category_name and row[5] == 'pending':
+                    queued_post = row
+                    row_idx = idx
+                    break
+                    
+        if queued_post:
+            final_post_text = queued_post[3]
+            photo_path = queued_post[4]
+            
+            # Проверяем, существует ли картинка
+            if not photo_path or not os.path.exists(photo_path):
+                print(f"⚠️ [CONTROL CHECK] Image missing for queued post ID {queued_post[0]}! Attempting regeneration...")
+                photo_filename = f"media_queue/{channel_type}_{queued_post[0]}.jpg"
+                img_ok = await generate_ai_image(final_post_text, channel_type, photo_filename)
+                if img_ok:
+                    photo_path = photo_filename
+                    try:
+                        ws.update_cell(row_idx, 5, photo_path)
+                        print(f"✅ [CONTROL CHECK] Image generated and path updated: {photo_path}")
+                    except Exception as e:
+                        print(f"⚠️ [CONTROL CHECK] Failed to update cell in sheet: {e}")
+                else:
+                    print(f"❌ [CONTROL CHECK] Failed to regenerate image for queued post ID {queued_post[0]}.")
+            else:
+                print(f"✅ [CONTROL CHECK] Image exists: {photo_path}")
+        else:
+            print(f"ℹ️ [CONTROL CHECK] No pending post found in queue for '{category_name}'.")
+    except Exception as e:
+        print(f"❌ [CONTROL CHECK] Error in check_and_regenerate_missing_images: {e}")
+
+def run_image_control_check(client, loop, channel_type, category_name):
+    """Запускает контрольную проверку картинки в фоновом потоке"""
+    asyncio.run_coroutine_threadsafe(check_and_regenerate_missing_images(client, loop, channel_type, category_name) if hasattr(client, 'loop') else check_and_regenerate_missing_images(client, channel_type, category_name), loop)
+
 def run_news_poster(client, loop):
     """Запуск денного огляду новин Трейдингу (12:00)"""
     asyncio.run_coroutine_threadsafe(post_news_report(client), loop)
