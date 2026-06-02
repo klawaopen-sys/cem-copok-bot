@@ -152,10 +152,8 @@ async def get_latest_ai_posts(client):
 def select_and_rewrite_ai_with_gemini(news_list, category_name):
     """Запитує у Gemini рерайт ШІ-поста під конкретну тематику"""
     api_key = getattr(config, 'GEMINI_AI_API_KEY', config.GEMINI_API_KEY)
-    if not api_key or api_key.startswith('AQ.'):
-        api_key = config.GEMINI_API_KEY
     if not api_key:
-        return None, None
+        return None, None, None
 
     category_info = AI_CATEGORIES.get(category_name, "")
     candidates_text = ""
@@ -452,7 +450,7 @@ async def generate_ai_image(post_text, channel_type, save_path):
     elif channel_type == 'psy':
         api_key = getattr(config, 'GEMINI_PSY_API_KEY', config.GEMINI_API_KEY)
         
-    if not api_key or api_key.startswith('AQ.'):
+    if not api_key:
         api_key = config.GEMINI_API_KEY
         
     if not api_key:
@@ -892,6 +890,19 @@ async def post_ai_category_update(client, category_name):
                 final_post_text = queued_post[3]
                 photo_path = queued_post[4]
                 
+                # Image regeneration fallback
+                if not photo_path or not os.path.exists(photo_path):
+                    print(f"⚠️ [QUEUE] Картинка відсутня для поста {queued_post[0]}. Спроба генерації...")
+                    photo_filename = f"media_queue/ai_{queued_post[0]}.jpg"
+                    img_ok = await generate_ai_image(final_post_text, "ai", photo_filename)
+                    if img_ok:
+                        photo_path = photo_filename
+                        try:
+                            ws.update_cell(row_idx, 5, photo_path)
+                            print(f"✅ [QUEUE] Шлях до картинки оновлено в таблиці: {photo_path}")
+                        except Exception as e:
+                            print(f"⚠️ [QUEUE] Не вдалося оновити шлях до картинки в таблиці: {e}")
+                
                 msg = None
                 if photo_path and os.path.exists(photo_path):
                     msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
@@ -1179,8 +1190,6 @@ async def get_latest_psy_posts(client):
 def select_and_rewrite_psy_with_gemini(news_list, category_name):
     """Запитує у Gemini рерайт психологічного поста під конкретну тематику"""
     api_key = getattr(config, 'GEMINI_PSY_API_KEY', config.GEMINI_API_KEY)
-    if not api_key or api_key.startswith('AQ.'):
-        api_key = config.GEMINI_API_KEY
     if not api_key:
         return None, None
 
@@ -1256,6 +1265,19 @@ async def post_psy_category_update(client, category_name):
                 print(f"🎯 [QUEUE] Знайдено запланований пост з ID {queued_post[0]} для категорії '{category_name}'!")
                 final_post_text = queued_post[3]
                 photo_path = queued_post[4]
+                
+                # Image regeneration fallback
+                if not photo_path or not os.path.exists(photo_path):
+                    print(f"⚠️ [QUEUE] Картинка відсутня для поста {queued_post[0]}. Спроба генерації...")
+                    photo_filename = f"media_queue/psy_{queued_post[0]}.jpg"
+                    img_ok = await generate_ai_image(final_post_text, "psy", photo_filename)
+                    if img_ok:
+                        photo_path = photo_filename
+                        try:
+                            ws.update_cell(row_idx, 5, photo_path)
+                            print(f"✅ [QUEUE] Шлях до картинки оновлено в таблиці: {photo_path}")
+                        except Exception as e:
+                            print(f"⚠️ [QUEUE] Не вдалося оновити шлях до картинки в таблиці: {e}")
                 
                 # Публікуємо через Telethon (від імені користувача Клава)
                 if photo_path and os.path.exists(photo_path):

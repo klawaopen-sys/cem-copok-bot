@@ -100,15 +100,15 @@ AI_SLOT_4_TIME = '21:00'  # AI Media & Creative
 
 # Канали-донори по ІИ та технологіях (додавайте свої юзернейми сюди!)
 AI_DONOR_CHANNELS = [
-    'artificialintelligenceworld',
-    'futuretools',
-    'neuro_news',
     'prompt_hub',
-    'techcrunch',
     'ai_tools',
-    'AI_to_business'
-    'TochkiNadAI'
-    '+frtm7Hh88ss1NDBh'
+    'AI_to_business',
+    'TochkiNadAI',
+    'hiaimedia',
+    'ai_newz',
+    'DeepTechNET',
+    'neuro_channel',
+    -1002546853359  # ID приватного каналу 'Никита Велс | AI'
 ]
 
 # Сигнатура з посиланням на бібліотекаря в кінці постів ІИ
