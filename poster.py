@@ -28,9 +28,6 @@ def fmt(val, prefix='$', decimals=2):
     return f"{prefix}{val:,.{decimals}f}"
 
 def build_morning_post(crypto, forex, market, news_text):
-    today = datetime.now(pytz.timezone('Europe/Kyiv'))
-    day_str = f"{today.day} {MONTHS_UA[today.month]}"
-
     btc_change = crypto['BTC']['change'] if crypto and 'BTC' in crypto else 0
     if btc_change > 1:
         mood = "🟢 Настрої на ринку: позитивні"
@@ -44,16 +41,16 @@ def build_morning_post(crypto, forex, market, news_text):
 
     def line(sym, label):
         if not crypto or sym not in crypto:
-            return f"- {label}: —"
+            return f"{label}: —"
         p = crypto[sym]['price']
         ch = crypto[sym]['change']
         em = "🟢" if ch > 0 else "🔴"
-        return f"- {label}: ${p:,.2f} ({em} {ch:+.2f}%)"
+        return f"{label}: ${p:,.2f} ({em} {ch:+.2f}%)"
 
     advice = get_gemini_trader_advice(crypto, forex, market)
 
     post = (
-        f"🌅 <b>Ранковий фінансовий огляд — {day_str}</b>\n\n"
+        f"🌅 <b>Ранковий фінансовий огляд</b>\n\n"
         f"{mood}\n\n"
         f"📰 <b>Головні новини:</b>\n{news_text}\n\n"
         f"💰 <b>Криптовалюти:</b>\n"
@@ -63,19 +60,19 @@ def build_morning_post(crypto, forex, market, news_text):
         f"{line('BNB','BNB/USD')}\n"
         f"{line('XRP','XRP/USD')}\n\n"
         f"💵 <b>Форекс:</b>\n"
-        f"- USD/UAH: ₴{forex.get('USD/UAH') or '—'}\n"
-        f"- EUR/UAH: ₴{forex.get('EUR/UAH') or '—'}\n"
-        f"- EUR/USD: ${forex.get('EUR/USD') or '—'}\n\n"
+        f"USD/UAH: ₴{forex.get('USD/UAH') or '—'}\n"
+        f"EUR/UAH: ₴{forex.get('EUR/UAH') or '—'}\n"
+        f"EUR/USD: ${forex.get('EUR/USD') or '—'}\n\n"
         f"📈 <b>Індекси:</b>\n"
-        f"- S&P 500: {fmt(market.get('SP500'), '', 2)}\n"
-        f"- Nasdaq 100: {fmt(market.get('NASDAQ'), '', 2)}\n"
-        f"- Dow Jones: {fmt(market.get('DOW'), '', 2)}\n\n"
+        f"S&P 500: {fmt(market.get('SP500'), '', 2)}\n"
+        f"Nasdaq 100: {fmt(market.get('NASDAQ'), '', 2)}\n"
+        f"Dow Jones: {fmt(market.get('DOW'), '', 2)}\n\n"
         f"🪙 <b>Товарні активи:</b>\n"
-        f"- Золото: {fmt(market.get('GOLD'))}\n"
-        f"- Нафта Brent: {fmt(market.get('BRENT'))}\n\n"
+        f"Золото: {fmt(market.get('GOLD'))}\n"
+        f"Нафта Brent: {fmt(market.get('BRENT'))}\n\n"
         f"🔑 <b>Ключові рівні BTC:</b>\n"
-        f"- Підтримка: {support or '—'}\n"
-        f"- Опір: {resist or '—'}\n\n"
+        f"Підтримка: {support or '—'}\n"
+        f"Опір: {resist or '—'}\n\n"
         f"💡 <b>Порада трейдеру:</b>\n"
         f"{advice}\n\n"
         f"#Крипта #Трейдинг #Фінанси"
@@ -239,13 +236,26 @@ async def post_morning_report():
         if os.path.exists(local_img):
             try:
                 print(f"📤 Відправляю локальну картинку: {local_img}...")
-                msg = await bot.send_photo(
-                    chat_id=config.TARGET_CHANNEL,
-                    photo=FSInputFile(local_img),
-                    caption=post_text,
-                    parse_mode='HTML'
-                )
-                message_id = msg.message_id
+                if len(post_text) <= 1024:
+                    msg = await bot.send_photo(
+                        chat_id=config.TARGET_CHANNEL,
+                        photo=FSInputFile(local_img),
+                        caption=post_text,
+                        parse_mode='HTML'
+                    )
+                    message_id = msg.message_id
+                else:
+                    msg_photo = await bot.send_photo(
+                        chat_id=config.TARGET_CHANNEL,
+                        photo=FSInputFile(local_img)
+                    )
+                    msg = await bot.send_message(
+                        chat_id=config.TARGET_CHANNEL,
+                        text=post_text,
+                        parse_mode='HTML',
+                        reply_to_message_id=msg_photo.message_id
+                    )
+                    message_id = msg.message_id
                 print("✅ Успішно надіслано!")
             except Exception as e:
                 print(f"⚠️ Не вдалося відправити картинку: {e}")

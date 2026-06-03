@@ -602,7 +602,10 @@ def check_psy_image_slot_3():
 def schedule_thread_func():
     """Фоновий потік для перевірки розкладу"""
     while True:
-        schedule.run_pending()
+        try:
+            schedule.run_pending()
+        except Exception as se:
+            print(f"⚠️ Помилка у потоці планувальника: {se}")
         time.sleep(30)
 
 # ---------------------------------------------------------------------

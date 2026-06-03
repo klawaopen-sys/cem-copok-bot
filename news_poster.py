@@ -1429,7 +1429,7 @@ async def check_and_regenerate_missing_images(client, channel_type, category_nam
 
 def run_image_control_check(client, loop, channel_type, category_name):
     """Запускает контрольную проверку картинки в фоновом потоке"""
-    asyncio.run_coroutine_threadsafe(check_and_regenerate_missing_images(client, loop, channel_type, category_name) if hasattr(client, 'loop') else check_and_regenerate_missing_images(client, channel_type, category_name), loop)
+    asyncio.run_coroutine_threadsafe(check_and_regenerate_missing_images(client, channel_type, category_name), loop)
 
 def run_news_poster(client, loop):
     """Запуск денного огляду новин Трейдингу (12:00)"""
