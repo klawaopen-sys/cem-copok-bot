@@ -532,7 +532,7 @@ def ai_job_slot_4():
     except Exception as e: print(f"Помилка в SLOT 4: {e}")
 
 def psy_job_slot_1():
-    print("⏰ Час PSY SLOT 1 (09:00)! Запускаю Morning Motivation...")
+    print("⏰ Час PSY SLOT 1 (08:30)! Запускаю Morning Motivation...")
     try:
         if main_loop and client: run_psy_news_poster(client, main_loop, "Morning Motivation")
     except Exception as e: print(f"Помилка в PSY SLOT 1: {e}")
@@ -587,7 +587,7 @@ def check_ai_image_slot_4():
     if main_loop and client: run_image_control_check(client, main_loop, "ai", "AI Media & Creative")
 
 def check_psy_image_slot_1():
-    print("⏰ Контроль зображення: PSY SLOT 1 (09:00)...")
+    print("⏰ Контроль зображення: PSY SLOT 1 (08:30)...")
     if main_loop and client: run_image_control_check(client, main_loop, "psy", "Morning Motivation")
 
 def check_psy_image_slot_2():
@@ -685,7 +685,7 @@ async def main():
         schedule.every().day.at("16:40", "Europe/Kyiv").do(check_ai_image_slot_3)
         schedule.every().day.at("20:40", "Europe/Kyiv").do(check_ai_image_slot_4)
         # Психологія (PSY)
-        schedule.every().day.at("08:40", "Europe/Kyiv").do(check_psy_image_slot_1)
+        schedule.every().day.at("08:10", "Europe/Kyiv").do(check_psy_image_slot_1)
         schedule.every().day.at("13:40", "Europe/Kyiv").do(check_psy_image_slot_2)
         schedule.every().day.at("18:40", "Europe/Kyiv").do(check_psy_image_slot_3)
 

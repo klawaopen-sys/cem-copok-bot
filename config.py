@@ -99,7 +99,7 @@ PSY_DONOR_CHANNELS = [
 ]
 
 # Тайм-слоти для публікацій Психології (Нейро-Апгрейд)
-PSY_SLOT_1_TIME = '09:00'  # Morning Motivation (Мотивація та натхнення)
+PSY_SLOT_1_TIME = '08:30'  # Morning Motivation (Мотивація та натхнення)
 PSY_SLOT_2_TIME = '14:00'  # Practical Psychology (Практична психологія та саморозвиток)
 PSY_SLOT_3_TIME = '19:00'  # Mindfulness & Relationships (Стосунки, рефлексія, ментальне здоров'я)
 
