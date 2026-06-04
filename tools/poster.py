@@ -1,7 +1,10 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import asyncio
 from aiogram import Bot
 import config
-from crypto_parser import (
+from tools.crypto_parser import (
     get_crypto_prices, get_forex_rates, get_market_data,
     get_cmc_news, get_btc_levels, get_gemini_trader_advice,
     apply_referral_links
@@ -232,7 +235,7 @@ async def post_morning_report():
         print("🚀 Публікую пост у канал...")
         message_id = None
         
-        local_img = 'morning_default.png'
+        local_img = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.tmp', 'morning_default.png')
         if os.path.exists(local_img):
             try:
                 print(f"📤 Відправляю локальну картинку: {local_img}...")

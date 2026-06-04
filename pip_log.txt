@@ -1,0 +1,94 @@
+Collecting schedule
+  Using cached schedule-1.2.2-py3-none-any.whl.metadata (3.8 kB)
+Collecting telethon
+  Using cached telethon-1.43.2-py3-none-any.whl.metadata (4.0 kB)
+Collecting Pillow
+  Using cached pillow-12.2.0-cp314-cp314-win_amd64.whl.metadata (9.0 kB)
+Collecting pytz
+  Using cached pytz-2026.2-py2.py3-none-any.whl.metadata (22 kB)
+Collecting gspread
+  Using cached gspread-6.2.1-py3-none-any.whl.metadata (11 kB)
+Collecting googletrans==3.1.0a0
+  Using cached googletrans-3.1.0a0-py3-none-any.whl
+Collecting httpx==0.13.3 (from googletrans==3.1.0a0)
+  Using cached httpx-0.13.3-py3-none-any.whl.metadata (25 kB)
+Requirement already satisfied: certifi in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from httpx==0.13.3->googletrans==3.1.0a0) (2026.2.25)
+Collecting hstspreload (from httpx==0.13.3->googletrans==3.1.0a0)
+  Using cached hstspreload-2025.1.1-py3-none-any.whl.metadata (2.1 kB)
+Requirement already satisfied: sniffio in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from httpx==0.13.3->googletrans==3.1.0a0) (1.3.1)
+Collecting chardet==3.* (from httpx==0.13.3->googletrans==3.1.0a0)
+  Using cached chardet-3.0.4-py2.py3-none-any.whl.metadata (3.2 kB)
+Collecting idna==2.* (from httpx==0.13.3->googletrans==3.1.0a0)
+  Using cached idna-2.10-py2.py3-none-any.whl.metadata (9.1 kB)
+Collecting rfc3986<2,>=1.3 (from httpx==0.13.3->googletrans==3.1.0a0)
+  Using cached rfc3986-1.5.0-py2.py3-none-any.whl.metadata (6.5 kB)
+Collecting httpcore==0.9.* (from httpx==0.13.3->googletrans==3.1.0a0)
+  Using cached httpcore-0.9.1-py3-none-any.whl.metadata (4.6 kB)
+Collecting h11<0.10,>=0.8 (from httpcore==0.9.*->httpx==0.13.3->googletrans==3.1.0a0)
+  Using cached h11-0.9.0-py2.py3-none-any.whl.metadata (8.1 kB)
+Collecting h2==3.* (from httpcore==0.9.*->httpx==0.13.3->googletrans==3.1.0a0)
+  Using cached h2-3.2.0-py2.py3-none-any.whl.metadata (32 kB)
+Collecting hyperframe<6,>=5.2.0 (from h2==3.*->httpcore==0.9.*->httpx==0.13.3->googletrans==3.1.0a0)
+  Using cached hyperframe-5.2.0-py2.py3-none-any.whl.metadata (7.2 kB)
+Collecting hpack<4,>=3.0 (from h2==3.*->httpcore==0.9.*->httpx==0.13.3->googletrans==3.1.0a0)
+  Using cached hpack-3.0.0-py2.py3-none-any.whl.metadata (7.0 kB)
+Collecting pyaes (from telethon)
+  Using cached pyaes-1.6.1-py3-none-any.whl
+Requirement already satisfied: rsa in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from telethon) (4.9.1)
+Requirement already satisfied: google-auth>=1.12.0 in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from gspread) (2.48.0)
+Collecting google-auth-oauthlib>=0.4.1 (from gspread)
+  Using cached google_auth_oauthlib-1.4.0-py3-none-any.whl.metadata (2.6 kB)
+Requirement already satisfied: pyasn1-modules>=0.2.1 in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from google-auth>=1.12.0->gspread) (0.4.2)
+Requirement already satisfied: cryptography>=38.0.3 in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from google-auth>=1.12.0->gspread) (46.0.5)
+Requirement already satisfied: pyasn1>=0.1.3 in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from rsa->telethon) (0.6.2)
+Requirement already satisfied: cffi>=2.0.0 in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from cryptography>=38.0.3->google-auth>=1.12.0->gspread) (2.0.0)
+Requirement already satisfied: pycparser in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from cffi>=2.0.0->cryptography>=38.0.3->google-auth>=1.12.0->gspread) (3.0)
+Collecting requests-oauthlib>=0.7.0 (from google-auth-oauthlib>=0.4.1->gspread)
+  Using cached requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+Collecting oauthlib>=3.0.0 (from requests-oauthlib>=0.7.0->google-auth-oauthlib>=0.4.1->gspread)
+  Using cached oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+Requirement already satisfied: requests>=2.0.0 in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from requests-oauthlib>=0.7.0->google-auth-oauthlib>=0.4.1->gspread) (2.32.5)
+Requirement already satisfied: charset_normalizer<4,>=2 in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from requests>=2.0.0->requests-oauthlib>=0.7.0->google-auth-oauthlib>=0.4.1->gspread) (3.4.4)
+Requirement already satisfied: urllib3<3,>=1.21.1 in F:\Antigravity\barakholka_u_kysheni_bot\venv\Lib\site-packages (from requests>=2.0.0->requests-oauthlib>=0.7.0->google-auth-oauthlib>=0.4.1->gspread) (2.6.3)
+Using cached httpx-0.13.3-py3-none-any.whl (55 kB)
+Using cached chardet-3.0.4-py2.py3-none-any.whl (133 kB)
+Using cached httpcore-0.9.1-py3-none-any.whl (42 kB)
+Using cached h11-0.9.0-py2.py3-none-any.whl (53 kB)
+Using cached h2-3.2.0-py2.py3-none-any.whl (65 kB)
+Using cached hpack-3.0.0-py2.py3-none-any.whl (38 kB)
+Using cached hyperframe-5.2.0-py2.py3-none-any.whl (12 kB)
+Using cached idna-2.10-py2.py3-none-any.whl (58 kB)
+Using cached rfc3986-1.5.0-py2.py3-none-any.whl (31 kB)
+Using cached schedule-1.2.2-py3-none-any.whl (12 kB)
+Using cached telethon-1.43.2-py3-none-any.whl (773 kB)
+Using cached pillow-12.2.0-cp314-cp314-win_amd64.whl (7.2 MB)
+Using cached pytz-2026.2-py2.py3-none-any.whl (510 kB)
+Using cached gspread-6.2.1-py3-none-any.whl (59 kB)
+Using cached google_auth_oauthlib-1.4.0-py3-none-any.whl (19 kB)
+Using cached requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+Using cached oauthlib-3.3.1-py3-none-any.whl (160 kB)
+Using cached hstspreload-2025.1.1-py3-none-any.whl (1.3 MB)
+Installing collected packages: rfc3986, pytz, pyaes, hyperframe, hpack, h11, chardet, schedule, Pillow, oauthlib, idna, hstspreload, h2, telethon, httpcore, requests-oauthlib, httpx, googletrans, google-auth-oauthlib, gspread
+  Attempting uninstall: h11
+    Found existing installation: h11 0.16.0
+    Uninstalling h11-0.16.0:
+      Successfully uninstalled h11-0.16.0
+  Attempting uninstall: idna
+    Found existing installation: idna 3.11
+    Uninstalling idna-3.11:
+      Successfully uninstalled idna-3.11
+  Attempting uninstall: httpcore
+    Found existing installation: httpcore 1.0.9
+    Uninstalling httpcore-1.0.9:
+      Successfully uninstalled httpcore-1.0.9
+  Attempting uninstall: httpx
+    Found existing installation: httpx 0.28.1
+    Uninstalling httpx-0.28.1:
+      Successfully uninstalled httpx-0.28.1
+
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+google-genai 1.65.0 requires httpx<1.0.0,>=0.28.1, but you have httpx 0.13.3 which is incompatible.
+Successfully installed Pillow-12.2.0 chardet-3.0.4 google-auth-oauthlib-1.4.0 googletrans-3.1.0a0 gspread-6.2.1 h11-0.9.0 h2-3.2.0 hpack-3.0.0 hstspreload-2025.1.1 httpcore-0.9.1 httpx-0.13.3 hyperframe-5.2.0 idna-2.10 oauthlib-3.3.1 pyaes-1.6.1 pytz-2026.2 requests-oauthlib-2.0.0 rfc3986-1.5.0 schedule-1.2.2 telethon-1.43.2
+
+[notice] A new release of pip is available: 26.0.1 -> 26.1.2
+[notice] To update, run: F:\Antigravity\barakholka_u_kysheni_bot\venv\Scripts\python.exe -m pip install --upgrade pip

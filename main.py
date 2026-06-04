@@ -13,9 +13,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 
 # Імпорт логіки публікацій
-from poster import run_poster
-from news_poster import run_news_poster, run_ai_news_poster, run_psy_news_poster, run_weekly_digest, fill_daily_queue, run_image_control_check
-from commenter import register_commenter
+from tools.poster import run_poster
+from tools.news_poster import run_news_poster, run_ai_news_poster, run_psy_news_poster, run_weekly_digest, fill_daily_queue, run_image_control_check
+from tools.commenter import register_commenter
 import config
 
 # Ініціалізація юзербота Telethon (Клава)
@@ -619,95 +619,101 @@ async def main():
     print("   🤖 СУПЕР-БОТ: ТРЕЙДИНГ + ПСИХОЛОГІЯ + ІИ + БІБЛІОТЕКАР")
     print("=" * 45)
     
-    if not os.path.exists("klava.session"):
-        print("❌ Файл klava.session не знайдено! Юзербот не зможе працювати.")
-        return
-
-    # 1. Запуск Telethon юзербота
-    await client.start()
-    print("✅ Telethon юзербот підключено успішно!")
+    from tools.instance_lock import lock
+    lock.acquire()
     
-    # Реєструємо всі авторепостери та автокоментатори екосистеми
-    register_commenter(client)
-    print("✅ Юзербот обробники успішно зареєстровані!")
-    
-    # Налаштовуємо команди для обох ботів та очищуємо старі
     try:
-        from aiogram.types import BotCommand
-        await bot.set_my_commands([
-            BotCommand(command="start", description="Запустити бібліотеку 📚")
-        ])
-        await psy_bot.set_my_commands([
-            BotCommand(command="start", description="Розпочати діалог 🧠")
-        ])
-        print("✅ Команди для ботів успішно налаштовані!")
-    except Exception as e:
-        print(f"⚠️ Не вдалося встановити команди для ботів: {e}")
+        if not os.path.exists("klava.session"):
+            print("❌ Файл klava.session не знайдено! Юзербот не зможе працювати.")
+            return
 
-    # 2. Запуск Aiogram бота-бібліотекаря в цьому ж event loop!
-    await bot.delete_webhook(drop_pending_updates=True)
-    asyncio.create_task(dp.start_polling(bot))
-    print("✅ Бот-Бібліотекар успішно запущено!")
-    
-    # Запуск Aiogram бота-психолога (@bbig333_bot) в цьому ж event loop!
-    await psy_bot.delete_webhook(drop_pending_updates=True)
-    asyncio.create_task(psy_dp.start_polling(psy_bot))
-    print("✅ Бот-Психолог успішно запущено!")
-    
-    # 3. Налаштовуємо розклад публікацій
-    # Трейдинг
-    schedule.every().day.at(config.MORNING_POST_TIME, "Europe/Kyiv").do(morning_job)
-    schedule.every().day.at("12:00", "Europe/Kyiv").do(noon_job)
-    # Штучний Інтелект (AI)
-    schedule.every().day.at(config.AI_SLOT_1_TIME, "Europe/Kyiv").do(ai_job_slot_1)
-    schedule.every().day.at(config.AI_SLOT_2_TIME, "Europe/Kyiv").do(ai_job_slot_2)
-    schedule.every().day.at(config.AI_SLOT_3_TIME, "Europe/Kyiv").do(ai_job_slot_3)
-    schedule.every().day.at(config.AI_SLOT_4_TIME, "Europe/Kyiv").do(ai_job_slot_4)
-    # Психологія (Нейро-Апгрейд)
-    schedule.every().day.at(config.PSY_SLOT_1_TIME, "Europe/Kyiv").do(psy_job_slot_1)
-    schedule.every().day.at(config.PSY_SLOT_2_TIME, "Europe/Kyiv").do(psy_job_slot_2)
-    schedule.every().day.at(config.PSY_SLOT_3_TIME, "Europe/Kyiv").do(psy_job_slot_3)
-    # Тижневий дайджест трейдингу (неділя о 14:00)
-    schedule.every().sunday.at("14:00", "Europe/Kyiv").do(weekly_digest_job)
-    # Нічна підготовка контенту (авточерга в Google Sheets)
-    # Нічна підготовка контенту (роздільні завдання)
-    schedule.every().day.at("03:00", "Europe/Kyiv").do(daily_queue_job_ai)
-    schedule.every().day.at("04:00", "Europe/Kyiv").do(daily_queue_job_psy)
+        # 1. Запуск Telethon юзербота
+        await client.start()
+        print("✅ Telethon юзербот підключено успішно!")
+        
+        # Реєструємо всі авторепостери та автокоментатори екосистеми
+        await register_commenter(client)
+        print("✅ Юзербот обробники успішно зареєстровані!")
+        
+        # Налаштовуємо команди для обох ботів та очищуємо старі
+        try:
+            from aiogram.types import BotCommand
+            await bot.set_my_commands([
+                BotCommand(command="start", description="Запустити бібліотеку 📚")
+            ])
+            await psy_bot.set_my_commands([
+                BotCommand(command="start", description="Розпочати діалог 🧠")
+            ])
+            print("✅ Команди для ботів успішно налаштовані!")
+        except Exception as e:
+            print(f"⚠️ Не вдалося встановити команди для ботів: {e}")
 
-    # Контрольні перевірки наявності зображень за 20 хвилин до публікації
-    # Штучний Інтелект (AI)
-    schedule.every().day.at("08:40", "Europe/Kyiv").do(check_ai_image_slot_1)
-    schedule.every().day.at("12:40", "Europe/Kyiv").do(check_ai_image_slot_2)
-    schedule.every().day.at("16:40", "Europe/Kyiv").do(check_ai_image_slot_3)
-    schedule.every().day.at("20:40", "Europe/Kyiv").do(check_ai_image_slot_4)
-    # Психологія (PSY)
-    schedule.every().day.at("08:40", "Europe/Kyiv").do(check_psy_image_slot_1)
-    schedule.every().day.at("13:40", "Europe/Kyiv").do(check_psy_image_slot_2)
-    schedule.every().day.at("18:40", "Europe/Kyiv").do(check_psy_image_slot_3)
+        # 2. Запуск Aiogram ботів тимчасово закоментовано локально для уникнення конфліктів із сервером
+        # await bot.delete_webhook(drop_pending_updates=True)
+        # asyncio.create_task(dp.start_polling(bot))
+        # print("✅ Бот-Бібліотекар успішно запущено!")
+        
+        # await psy_bot.delete_webhook(drop_pending_updates=True)
+        # asyncio.create_task(psy_dp.start_polling(psy_bot))
+        # print("✅ Бот-Психолог успішно запущено!")
+        
+        # 3. Налаштовуємо розклад публікацій
+        # Трейдинг
+        schedule.every().day.at("12:00", "Europe/Kyiv").do(noon_job)
+        schedule.every().day.at("14:15", "Europe/Kyiv").do(noon_job)
+        schedule.every().day.at("14:20", "Europe/Kyiv").do(psy_job_slot_1)
+        # Штучний Інтелект (AI)
+        schedule.every().day.at(config.AI_SLOT_1_TIME, "Europe/Kyiv").do(ai_job_slot_1)
+        schedule.every().day.at(config.AI_SLOT_2_TIME, "Europe/Kyiv").do(ai_job_slot_2)
+        schedule.every().day.at(config.AI_SLOT_3_TIME, "Europe/Kyiv").do(ai_job_slot_3)
+        schedule.every().day.at(config.AI_SLOT_4_TIME, "Europe/Kyiv").do(ai_job_slot_4)
+        # Психологія (Нейро-Апгрейд)
+        schedule.every().day.at(config.PSY_SLOT_1_TIME, "Europe/Kyiv").do(psy_job_slot_1)
+        schedule.every().day.at(config.PSY_SLOT_2_TIME, "Europe/Kyiv").do(psy_job_slot_2)
+        schedule.every().day.at(config.PSY_SLOT_3_TIME, "Europe/Kyiv").do(psy_job_slot_3)
+        # Тижневий дайджест трейдингу (неділя о 14:00)
+        schedule.every().sunday.at("14:00", "Europe/Kyiv").do(weekly_digest_job)
+        # Нічна підготовка контенту (авточерга в Google Sheets)
+        # Нічна підготовка контенту (роздільні завдання)
+        schedule.every().day.at("03:00", "Europe/Kyiv").do(daily_queue_job_ai)
+        schedule.every().day.at("04:00", "Europe/Kyiv").do(daily_queue_job_psy)
 
-    
-    print(f"📅 Зареєстровано розклад трейдингу (Київ):")
-    print(f"   - Ранковий аналіз: щодня о {config.MORNING_POST_TIME}")
-    print(f"   - Денні новини:    щодня о 12:00")
-    print(f"   - Тижневий дайджест: щонеділі о 14:00")
-    print(f"📅 Зареєстровано розклад ШІ (Київ):")
-    print(f"   - 1. AI News & Web3 Tech:        щодня о {config.AI_SLOT_1_TIME}")
-    print(f"   - 2. AI Productivity & Work:     щодня о {config.AI_SLOT_2_TIME}")
-    print(f"   - 3. AI Finance & Dev Tools:     щодня о {config.AI_SLOT_3_TIME}")
-    print(f"   - 4. AI Media & Creative:        щодня о {config.AI_SLOT_4_TIME}")
-    print(f"📅 Зареєстровано розклад Психології (Київ):")
-    print(f"   - 1. Morning Motivation:         щодня о {config.PSY_SLOT_1_TIME}")
-    print(f"   - 2. Practical Psychology:       щодня о {config.PSY_SLOT_2_TIME}")
-    print(f"   - 3. Mindfulness & Relationships: щодня о {config.PSY_SLOT_3_TIME}")
-    print(f"📅 Зареєстровано нічну авточергу в Sheets (Київ): ИИ в 03:00, Психология в 04:00")
+        # Контрольні перевірки наявності зображень за 20 хвилин до публікації
+        # Штучний Інтелект (AI)
+        schedule.every().day.at("08:40", "Europe/Kyiv").do(check_ai_image_slot_1)
+        schedule.every().day.at("12:40", "Europe/Kyiv").do(check_ai_image_slot_2)
+        schedule.every().day.at("16:40", "Europe/Kyiv").do(check_ai_image_slot_3)
+        schedule.every().day.at("20:40", "Europe/Kyiv").do(check_ai_image_slot_4)
+        # Психологія (PSY)
+        schedule.every().day.at("08:40", "Europe/Kyiv").do(check_psy_image_slot_1)
+        schedule.every().day.at("13:40", "Europe/Kyiv").do(check_psy_image_slot_2)
+        schedule.every().day.at("18:40", "Europe/Kyiv").do(check_psy_image_slot_3)
 
-    
-    # Запускаємо розклад у фоновому потоці
-    threading.Thread(target=schedule_thread_func, daemon=True).start()
-    
-    print("⏳ Супер-бот активний та очікує подій...")
-    # Тримаємо програму відкритою і слухаємо Telethon
-    await client.run_until_disconnected()
+        
+        print(f"📅 Зареєстровано розклад трейдингу (Київ):")
+        print(f"   - Ранковий аналіз: щодня о {config.MORNING_POST_TIME}")
+        print(f"   - Денні новини:    щодня о 12:00")
+        print(f"   - Тижневий дайджест: щонеділі о 14:00")
+        print(f"📅 Зареєстровано розклад ШІ (Київ):")
+        print(f"   - 1. AI News & Web3 Tech:        щодня о {config.AI_SLOT_1_TIME}")
+        print(f"   - 2. AI Productivity & Work:     щодня о {config.AI_SLOT_2_TIME}")
+        print(f"   - 3. AI Finance & Dev Tools:     щодня о {config.AI_SLOT_3_TIME}")
+        print(f"   - 4. AI Media & Creative:        щодня о {config.AI_SLOT_4_TIME}")
+        print(f"📅 Зареєстровано розклад Психології (Київ):")
+        print(f"   - 1. Morning Motivation:         щодня о {config.PSY_SLOT_1_TIME}")
+        print(f"   - 2. Practical Psychology:       щодня о {config.PSY_SLOT_2_TIME}")
+        print(f"   - 3. Mindfulness & Relationships: щодня о {config.PSY_SLOT_3_TIME}")
+        print(f"📅 Зареєстровано нічну авточергу в Sheets (Київ): ИИ в 03:00, Психология в 04:00")
+
+        
+        # Запускаємо розклад у фоновому потоці
+        threading.Thread(target=schedule_thread_func, daemon=True).start()
+        
+        print("⏳ Супер-бот активний та очікує подій...")
+        # Тримаємо програму відкритою і слухаємо Telethon
+        await client.run_until_disconnected()
+    finally:
+        lock.release()
 
 if __name__ == "__main__":
     asyncio.run(main())

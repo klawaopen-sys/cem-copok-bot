@@ -1,5 +1,7 @@
-import asyncio
+import sys
 import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import asyncio
 import requests
 import urllib.parse
 from telethon import TelegramClient
@@ -8,10 +10,11 @@ from aiogram.types import FSInputFile
 import config
 import pytz
 from datetime import datetime
-from crypto_parser import apply_referral_links
+from tools.crypto_parser import apply_referral_links
 from PIL import Image, ImageDraw, ImageFont
 import re
 import base64
+from tools.news_reporter import fetch_rss_news
 
 
 # ---------------------------------------------------------------------
@@ -99,6 +102,140 @@ def select_and_rewrite_news_with_gemini(news_items):
     except Exception as e:
         print(f"Помилка генерації новин трейдингу через Gemini: {e}")
     return None, None
+
+async def get_my_last_posts(client, channel_name, limit=15):
+    """Зчитує останні limit повідомлень з власного каналу. Стійка до AuthKeyDuplicatedError."""
+    posts = []
+    print(f"📖 Зчитую історію власного каналу {channel_name}...")
+    try:
+        if not client.is_connected():
+            await client.connect()
+        async for message in client.iter_messages(channel_name, limit=limit):
+            text = message.text or message.message
+            if text:
+                posts.append(text.strip())
+        print(f"✅ Успішно зчитано {len(posts)} останніх постів.")
+    except Exception as e:
+        print(f"⚠️ Не вдалося зчитати історію каналу через Telethon: {e}")
+        print("🔄 Перемикаюсь в режим симуляції (порожня історія).")
+    return posts
+
+def select_and_compile_with_gemini(news_list, my_last_posts, category_name, channel_type):
+    """Вибирає тренд з RSS, перевіряє на дублікати та комбінує пост з 3+ джерел"""
+    if not config.GEMINI_API_KEY:
+        print("❌ Помилка: Ключ Gemini не знайдено!")
+        return None
+        
+    if not news_list:
+        print("⚠️ Список новин пустий.")
+        return None
+
+    my_last_posts_text = ""
+    for idx, post in enumerate(my_last_posts):
+        my_last_posts_text += f"\n--- НАШ МИНУЛИЙ ПОСТ #{idx} ---\n{post[:200]}...\n"
+
+    news_pool_text = ""
+    for idx, item in enumerate(news_list):
+        news_pool_text += f"\n--- НОВИНА #{idx} (Джерело: {item['source']}, Посилання: {item['link']}) ---\nЗаголовок: {item['title']}\nОпис: {item['description']}\n"
+
+    # Визначаємо особливості для кожного каналу
+    if channel_type == 'trading':
+        channel_title = "Сім сорок"
+        target_lang = "українською мовою в іронічному та професійному стилі"
+        extra_rules = (
+            "1. КРИТИЧНО: Заборонено давати будь-які фінансові поради, аналітику цін криптовалют чи торгові сигнали.\n"
+            "2. КРИТИЧНО: Якщо в тексті згадуються теми штучного інтелекту, обов'язково зроби красиве текстове відсилання-посилання на наш партнерський канал про ШІ: @te_shoo_treba (наприклад, 'дізнатися більше можна в <b><a href=\"https://t.me/te_shoo_treba\">Те що треба | AI</a></b>').\n"
+            "3. Якщо згадується психологія, стрес або ментальне здоров'я, зроби красиве відсилання на партнерський канал про психологію: @ncux_olo_guY (наприклад, 'підтримати ментальне здоров\\'я допоможе <b><a href=\"https://t.me/ncux_olo_guY\">Нейро-Апгрейд</a></b>').\n"
+            "4. В кінці додай тематичні хештеги."
+        )
+    elif channel_type == 'psy':
+        channel_title = "Нейро-Апгрейд"
+        target_lang = "красивою, грамотною українською мовою з професійним, але розмовним і захоплюючим тоном"
+        extra_rules = (
+            "1. Пост має бути легким для сприйняття, надихаючим та практичним.\n"
+            "2. Структуруй текст: використовуй абзаци, списки та доречні емодзі."
+        )
+    else: # 'ai'
+        channel_title = "Те що треба | AI"
+        target_lang = "професійною українською мовою з акцентом на технології та користь"
+        extra_rules = (
+            "1. КРИТИЧНО: Заборонено давати будь-які фінансові поради чи аналітику цін.\n"
+            "2. Якщо в обраній темі є корисні готові промпти (для Midjourney, ChatGPT, Flux тощо), витягни та додай їх наприкінці посту, загорнувши у теги [PROMPT_START] та [PROMPT_END]."
+        )
+
+    prompt = (
+        f"Ти — головний редактор Telegram-каналу '{channel_title}'.\n"
+        f"Твоє завдання — проаналізувати свіжі новини з різних джерел та написати один унікальний пост, "
+        "виключивши теми, які ми вже публікували.\n\n"
+        f"Категорія публікації: {category_name}\n\n"
+        "Ось список наших останніх 15 постів (це теми, які публікувати ЗАБОРОНЕНО):\n"
+        f"{my_last_posts_text if my_last_posts_text else 'Історія порожня'}\n\n"
+        "Ось свіжий пул новин, зібраних з інтернету:\n"
+        f"{news_pool_text}\n\n"
+        "Інструкція:\n"
+        "1. Згрупуй новини, які описують ОДИН І ТОЙ САМИЙ інфоповод у різних джерелах.\n"
+        "2. Обери інфоповод, який згадується щонайменше у 3-х різних джерелах (для підтвердження тренду та фактів).\n"
+        "3. Порівняй цей інфоповод з нашими останнями 15 постами. Якщо тема схожа за змістом (навіть іншими словами), ти ЗОБОВ'ЯЗАНИЙ її проігнорувати та перейти до наступної підтвердженої теми.\n"
+        f"4. Якщо тема повністю унікальна — скомпілюй з цих джерел один якісний пост {target_lang}.\n"
+        "5. Пост має бути лаконічним і СТРОГО до 650-700 символів (разом із пробілами).\n"
+        "6. Використовуй ТІЛЬКИ HTML-теги для виділення жирного тексту: <b>жирний текст</b>. НІКОЛИ не використовуй маркдаун із зірочками.\n"
+        "7. В кінці поста додай посилання на 3 джерела (використовуй посилання з пулу новин) у вигляді красивого списку HTML: <i>Джерела: <a href=\"link1\">1</a>, <a href=\"link2\">2</a>, <a href=\"link3\">3</a></i>.\n"
+        f"{extra_rules}\n"
+        "8. Обов'язково додай опис сцени для генератора зображень англійською мовою (IMAGE_PROMPT). Вона має бути суто візуальною, без тексту.\n\n"
+        "Суворий формат відповіді:\n"
+        "RESPONSE_STATUS: UNIQUE\n"
+        "POST_TEXT:\n"
+        "<текст поста>\n"
+        "IMAGE_PROMPT:\n"
+        "<опис сцени для генератора зображень англійською мовою без тексту та логотипів>\n\n"
+        "If жодної унікальної теми з 3+ джерелами не знайдено, поверни:\n"
+        "RESPONSE_STATUS: NO_UNIQUE_NEWS"
+    )
+
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
+        headers = {"Content-Type": "application/json"}
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        
+        r = requests.post(url, headers=headers, json=payload, timeout=45)
+        if r.status_code == 200:
+            res_json = r.json()
+            response_text = res_json['candidates'][0]['content']['parts'][0]['text'].strip()
+            
+            status_match = re.search(r'RESPONSE_STATUS:\s*(\w+)', response_text)
+            if status_match:
+                status = status_match.group(1).upper()
+                if status == "NO_UNIQUE_NEWS":
+                    print(f"⚠️ Gemini не знайшов жодної унікальної підтвердженої новини для {channel_type}.")
+                    return None
+                    
+            post_match = re.search(r'POST_TEXT:\s*\n(.*)\nIMAGE_PROMPT:', response_text, re.DOTALL | re.IGNORECASE)
+            image_match = re.search(r'IMAGE_PROMPT:\s*\n(.*)', response_text, re.DOTALL | re.IGNORECASE)
+            
+            post_text = post_match.group(1).strip() if post_match else ""
+            image_prompt = image_match.group(1).strip() if image_match else ""
+            
+            if not post_text:
+                parts = response_text.split("POST_TEXT:")
+                if len(parts) > 1:
+                    subparts = parts[1].split("IMAGE_PROMPT:")
+                    post_text = subparts[0].strip()
+                    if len(subparts) > 1:
+                        image_prompt = subparts[1].strip()
+            
+            post_text = re.sub(r'^["\'`]+|["\'`]+$', '', post_text).strip()
+            image_prompt = re.sub(r'^["\'`]+|["\'`]+$', '', image_prompt).strip()
+            
+            return {
+                "post_text": post_text,
+                "image_prompt": image_prompt
+            }
+        else:
+            print(f"⚠️ Помилка Gemini API: HTTP {r.status_code}")
+    except Exception as e:
+        print(f"❌ Помилка під час генерації поста через Gemini: {e}")
+        
+    return None
 
 # ---------------------------------------------------------------------
 # Б. Налаштування для Іскусственного Інтелекту (AI / ШІ)
@@ -330,11 +467,11 @@ def apply_brand_frame(photo_path, channel_type):
         draw.text((text_x, text_y), tag_text, fill=tag_text_color, font=font)
         
         # Watermark
-        logo_file = "logo.jpg"
+        logo_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "logo.jpg")
         if channel_type == 'psy':
-            logo_file = "psy_logo.png"
+            logo_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "psy_logo.png")
         elif channel_type == 'ai':
-            logo_file = "ai_logo.png"
+            logo_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "ai_logo.png")
             
         if os.path.exists(logo_file):
             try:
@@ -436,10 +573,13 @@ def contains_russian_text(image_path):
         
     return False
 
-async def generate_ai_image(post_text, channel_type, save_path):
+async def generate_ai_image(post_text, channel_type, save_path, image_url=None):
     """
-    Generates a stunning unique visual using Gemini to write the prompt 
-    and Pollinations.ai (Flux) to render the image.
+    Generates a stunning unique visual using a quadruple fallback chain:
+    Step 1: Pollinations AI
+    Step 2: ModelsLab API (Flux/SDXL)
+    Step 3: Hugging Face InferenceClient (FLUX.1-schnell)
+    Step 4: Fallback to RSS original image download
     Applies the brand frame at the end.
     """
     clean_text = re.sub(r'<[^>]+>', '', post_text)
@@ -453,68 +593,125 @@ async def generate_ai_image(post_text, channel_type, save_path):
     if not api_key:
         api_key = config.GEMINI_API_KEY
         
-    if not api_key:
-        print("⚠️ Gemini API key not found. Skipping image generation.")
-        return False
-        
-    style_guideline = ""
-    if channel_type == 'trading':
-        style_guideline = "Style: premium 3D render, trading/charts/financial concept illustration, dark mode theme with elegant gold/green accents, clean studio lighting, 8k resolution."
-    elif channel_type == 'ai':
-        style_guideline = "Style: futuristic high-tech 3D render illustration, abstract artificial intelligence, glowing cybernetic lines, deep purple and electric cyan accents, cyberpunk vibe, 8k resolution."
-    else: # psy
-        style_guideline = "Style: serene minimalist 3D rendering, pastel and calming warm tones, human mind/mindfulness/self-reflection concept illustration, organic fluid shapes, soft studio shadows."
-
-    prompt = (
-        f"Based on this Ukrainian article, generate a highly descriptive visual prompt for an AI image generator (Stable Diffusion/Flux) in English.\n\n"
-        f"Article content:\n{clean_text[:1200]}\n\n"
-        f"Instructions:\n"
-        f"1. Generate a descriptive visual scene representing the main idea of this article.\n"
-        f"2. {style_guideline}\n"
-        f"3. CRITICAL: The image must be purely visual. It must have NO text, NO words, NO letters, NO labels, NO typography. It should have absolutely empty spaces where text would be.\n"
-        f"4. Output ONLY the English prompt string. DO NOT wrap in quotes, DO NOT write any markdown, introduction, or explanations. Just the prompt text itself."
-    )
+    gemini_prompt = clean_text[:200]
     
+    if api_key:
+        prompt_for_gemini = (
+            f"Based on this Ukrainian article, generate a highly descriptive visual prompt for an AI image generator (Stable Diffusion/Flux) in English.\n\n"
+            f"Article content:\n{clean_text[:1000]}\n\n"
+            f"Instructions:\n"
+            f"1. Generate a descriptive visual scene representing the main idea of this article.\n"
+            f"2. CRITICAL: The image must be purely visual. It must have NO text, NO words, NO letters, NO labels, NO typography.\n"
+            f"3. Output ONLY the English prompt string. DO NOT wrap in quotes, DO NOT write any markdown, introduction, or explanations. Just the prompt text itself."
+        )
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
+            headers = {"Content-Type": "application/json"}
+            payload = {"contents": [{"parts": [{"text": prompt_for_gemini}]}]}
+            r = requests.post(url, headers=headers, json=payload, timeout=25)
+            if r.status_code == 200:
+                gemini_prompt = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+                gemini_prompt = re.sub(r'^["\'`]+|["\'`]+$', '', gemini_prompt)
+            else:
+                print(f"⚠️ Gemini prompt generation failed with code {r.status_code}: {r.text}")
+        except Exception as ge:
+            print(f"⚠️ Gemini prompt generation error: {ge}")
+
+    # Стилизация под тематику канала
+    if channel_type == 'trading':
+        style_suffix = ", tech digital art, cyberpunk financial interface, neon cryptocurrency charts, 3d render, professional design, no text, no words, no letters, no typography, no logos"
+    elif channel_type == 'psy':
+        style_suffix = ", minimalist 2d vector art, abstract flat design, soft pastel colors, emotional metaphorical illustration, clean background, no text, no words, no letters, no typography, no logos"
+    else: # 'ai'
+        style_suffix = ", dynamic comic book style, pop art, marvel dc vivid colors, action scene illustration, sharp lines, no text, no words, no letters, no typography, no logos"
+
+    final_prompt = gemini_prompt + style_suffix
+    print(f"🔮 Final generated prompt ({channel_type}): {final_prompt}")
+
+    # --- ШАГ 1: Pollinations AI ---
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
-        headers = {"Content-Type": "application/json"}
-        payload = {"contents": [{"parts": [{"text": prompt}]}]}
-        
-        print(f"🎨 Asking Gemini to create image prompt for '{channel_type}'...")
-        r = requests.post(url, headers=headers, json=payload, timeout=25)
-        if r.status_code == 200:
-            gemini_prompt = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-            gemini_prompt = re.sub(r'^["\'`]+|["\'`]+$', '', gemini_prompt)
-            gemini_prompt += ", clean, modern digital art, vibrant colors, studio lighting, highly detailed, octane render, 8k, no text, no words, no letters, no typography, no logos"
-            
-            print(f"🔮 Prompt: {gemini_prompt[:150]}...")
-            
-            encoded_prompt = urllib.parse.quote(gemini_prompt)
-            gen_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
-            
-            for attempt in range(1, 4):
-                try:
-                    print(f"🚀 Generating image via Pollinations.ai (Flux) (Attempt {attempt}/3)...")
-                    img_resp = requests.get(gen_url, timeout=45)
-                    if img_resp.status_code == 200:
-                        with open(save_path, "wb") as f:
-                            f.write(img_resp.content)
-                        print("💾 Image successfully generated and saved!")
-                        apply_brand_frame(save_path, channel_type)
-                        return True
-                    else:
-                        print(f"⚠️ Pollinations API error (Attempt {attempt}/3): {img_resp.status_code}")
-                except Exception as e:
-                    print(f"❌ Failed to generate AI image (Attempt {attempt}/3): {e}")
-                
-                if attempt < 3:
-                    print("⏳ Waiting 5 seconds before retrying...")
-                    await asyncio.sleep(5)
+        print("🚀 [Step 1] Generating via Pollinations AI...")
+        encoded_prompt = urllib.parse.quote(final_prompt)
+        gen_url = f"https://image.pollinations.ai/p/{encoded_prompt}?width=1024&height=1024&nologo=true"
+        r = requests.get(gen_url, timeout=25)
+        if r.status_code == 200 and len(r.content) > 5000:
+            with open(save_path, "wb") as f:
+                f.write(r.content)
+            print("💾 Image successfully generated via Pollinations AI!")
+            apply_brand_frame(save_path, channel_type)
+            return True
         else:
-            print(f"⚠️ Gemini API error during prompt generation: {r.status_code}")
+            print(f"⚠️ Pollinations failed (Status: {r.status_code}, Length: {len(r.content) if r.content else 0})")
     except Exception as e:
-        print(f"❌ Failed to generate AI image: {e}")
-        
+        print(f"⚠️ Pollinations failed with error: {e}")
+
+    # --- ШАГ 2: ModelsLab API ---
+    MODELSLAB_API_KEY = "VZn19KJyq1BlaUWKJGiQ9UQjH9DTrO1vKPurkK8ppRFbhMLvkGfBlWKbqxGR"
+    try:
+        print("🚀 [Step 2] Generating via ModelsLab...")
+        url = "https://modelslab.com/api/v7/images/text-to-image"
+        payload = {
+            "key": MODELSLAB_API_KEY,
+            "prompt": final_prompt,
+            "negative_prompt": "blurry, low quality, distorted, ugly, text, words, logo",
+            "width": "1024",
+            "height": "1024",
+            "samples": "1",
+            "num_inference_steps": "20",
+            "guidance_scale": 7.5,
+            "seed": None,
+            "model_id": "sdxl"
+        }
+        headers = {'Content-Type': 'application/json'}
+        r = requests.post(url, json=payload, headers=headers, timeout=25)
+        if r.status_code == 200:
+            res_data = r.json()
+            if res_data.get("status") == "success" and res_data.get("output"):
+                img_url = res_data["output"][0]
+                img_r = requests.get(img_url, timeout=25)
+                if img_r.status_code == 200:
+                    with open(save_path, "wb") as f:
+                        f.write(img_r.content)
+                    print("💾 Image successfully generated via ModelsLab!")
+                    apply_brand_frame(save_path, channel_type)
+                    return True
+            else:
+                print(f"⚠️ ModelsLab status: {res_data.get('status')}, error: {res_data.get('message')}")
+        else:
+            print(f"⚠️ ModelsLab failed (Status: {r.status_code})")
+    except Exception as e:
+        print(f"⚠️ ModelsLab failed with error: {e}")
+
+    # --- ШАГ 3: Hugging Face Inference API (InferenceClient) ---
+    HUGGINGFACE_API_KEY = "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"
+    try:
+        print("🚀 [Step 3] Generating via Hugging Face InferenceClient...")
+        from huggingface_hub import InferenceClient
+        hf_client = InferenceClient(api_key=HUGGINGFACE_API_KEY)
+        image = hf_client.text_to_image(prompt=final_prompt, model="black-forest-labs/FLUX.1-schnell")
+        image.save(save_path)
+        print("💾 Image successfully generated via Hugging Face InferenceClient!")
+        apply_brand_frame(save_path, channel_type)
+        return True
+    except Exception as e:
+        print(f"⚠️ Hugging Face failed with error: {e}")
+
+    # --- ШАГ 4: Fallback до оригінальної картинки з RSS-новини ---
+    if image_url:
+        try:
+            print(f"📥 [Step 4 Fallback] Downloading original image from RSS: {image_url}...")
+            r = requests.get(image_url, timeout=20)
+            if r.status_code == 200 and len(r.content) > 1000:
+                with open(save_path, "wb") as f:
+                    f.write(r.content)
+                print("💾 [Fallback] Original RSS image downloaded successfully!")
+                apply_brand_frame(save_path, channel_type)
+                return True
+            else:
+                print(f"⚠️ [Fallback] RSS image download failed (Status: {r.status_code})")
+        except Exception as e:
+            print(f"⚠️ [Fallback] Failed to download original image: {e}")
+
     return False
 
 
@@ -681,37 +878,46 @@ async def fill_daily_queue(client, channel_filter="all"):
                 existing_pending[(chan, cat)] = True
 
     now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
-    used_donor_posts = set()
 
     # 2. Check and fill AI slots
     if channel_filter in ["ai", "all"]:
         ai_categories = ["AI News & Web3 Tech", "AI Productivity & Work", "AI Finance & Dev Tools", "AI Media & Creative"]
-        # Fetch AI candidates once
-        ai_posts = []
-        try:
-            ai_posts = await get_latest_ai_posts(client)
-        except Exception as e:
-            print(f"⚠️ Error fetching AI posts for queue: {e}")
+        
+        rss_urls = getattr(config, 'AI_REPORTER_RSS_URLS', [])
+        if not rss_urls:
+            rss_urls = getattr(config, 'REPORTER_RSS_URLS', [])
+        news_list = fetch_rss_news(rss_urls)
+        
+        my_last_posts = await get_my_last_posts(client, config.AI_TARGET_CHANNEL, limit=15)
 
         for cat in ai_categories:
             if ('ai', cat) in existing_pending:
                 print(f"⏭️ AI slot '{cat}' already has a pending post. Skipping.")
                 continue
                 
-            if not ai_posts:
-                continue
-                
-            # Filter out already used candidates in the same run to prevent duplicate images/sources
-            candidates = [item for item in ai_posts if (item['channel'], item['message_id']) not in used_donor_posts]
-            if not candidates:
-                print(f"⚠️ No fresh AI candidates left for slot '{cat}'.")
+            if not news_list:
+                print(f"⚠️ No AI RSS news available.")
                 continue
                 
             print(f"📦 Preparing AI post for category '{cat}'...")
-            post_text, chosen_item, extracted_prompt = select_and_rewrite_ai_with_gemini(candidates, cat)
-            if post_text and chosen_item:
-                # Mark candidate as used
-                used_donor_posts.add((chosen_item['channel'], chosen_item['message_id']))
+            post_data = select_and_compile_with_gemini(news_list, my_last_posts, cat, "ai")
+            if post_data and post_data.get("post_text"):
+                post_text = post_data["post_text"]
+                image_prompt = post_data["image_prompt"]
+                
+                # Add to history to prevent duplicates in subsequent slots
+                my_last_posts.insert(0, post_text)
+                
+                # Extract prompt if present
+                extracted_prompt = None
+                if "[PROMPT_START]" in post_text and "[PROMPT_END]" in post_text:
+                    try:
+                        parts = post_text.split("[PROMPT_START]")
+                        post_text = parts[0].strip()
+                        prompt_part = parts[1].split("[PROMPT_END]")[0].strip()
+                        extracted_prompt = prompt_part
+                    except Exception:
+                        pass
                 
                 final_text = post_text
                 if extracted_prompt:
@@ -720,24 +926,12 @@ async def fill_daily_queue(client, channel_filter="all"):
                 final_text = auto_replace_links(final_text)
                 
                 photo_filename = f"media_queue/ai_{next_id}.jpg"
-                img_ok = await generate_ai_image(final_text, "ai", photo_filename)
+                # Шукаємо оригінальну картинку з RSS для fallback
+                rss_fallback_url = next((item.get('image_url') for item in news_list if item.get('image_url')), None)
+                img_ok = await generate_ai_image(image_prompt, "ai", photo_filename, image_url=rss_fallback_url)
+                
                 if not img_ok:
-                    if chosen_item and chosen_item["has_photo"]:
-                        try:
-                            photo_filename = await client.download_media(chosen_item["message_obj"], file=photo_filename)
-                            if contains_russian_text(photo_filename):
-                                print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
-                                try: os.remove(photo_filename)
-                                except Exception: pass
-                                photo_filename = f"media_queue/ai_{next_id}.jpg"
-                                img_ok = await generate_ai_image(final_text, "ai", photo_filename)
-                            else:
-                                apply_brand_frame(photo_filename, "ai")
-                                img_ok = True
-                        except Exception:
-                            photo_filename = ""
-                    else:
-                        photo_filename = ""
+                    photo_filename = ""
                 
                 row = [str(next_id), "ai", cat, final_text, photo_filename if img_ok else "", "pending", now_str, "", ""]
                 ws.append_row(row)
@@ -748,59 +942,44 @@ async def fill_daily_queue(client, channel_filter="all"):
     # 3. Check and fill PSY slots
     if channel_filter in ["psy", "all"]:
         psy_categories = ["Morning Motivation", "Practical Psychology", "Mindfulness & Relationships"]
-        psy_posts = []
-        try:
-            psy_posts = await get_latest_psy_posts(client)
-        except Exception as e:
-            print(f"⚠️ Error fetching PSY posts for queue: {e}")
+        
+        rss_urls = getattr(config, 'PSY_REPORTER_RSS_URLS', [])
+        news_list = fetch_rss_news(rss_urls)
+        
+        my_last_posts = await get_my_last_posts(client, config.PSY_TARGET_CHANNEL, limit=15)
 
         for cat in psy_categories:
             if ('psy', cat) in existing_pending:
                 print(f"⏭️ PSY slot '{cat}' already has a pending post. Skipping.")
                 continue
                 
-            if not psy_posts:
-                continue
-                
-            # Filter out already used candidates in the same run to prevent duplicate images/sources
-            candidates = [item for item in psy_posts if (item['channel'], item['message_id']) not in used_donor_posts]
-            if not candidates:
-                print(f"⚠️ No fresh PSY candidates left for slot '{cat}'.")
+            if not news_list:
+                print(f"⚠️ No PSY RSS news available.")
                 continue
                 
             print(f"📦 Preparing PSY post for category '{cat}'...")
-            post_text, chosen_item = select_and_rewrite_psy_with_gemini(candidates, cat)
-            if post_text and chosen_item:
-                # Mark candidate as used
-                used_donor_posts.add((chosen_item['channel'], chosen_item['message_id']))
+            post_data = select_and_compile_with_gemini(news_list, my_last_posts, cat, "psy")
+            if post_data and post_data.get("post_text"):
+                post_text = post_data["post_text"]
+                image_prompt = post_data["image_prompt"]
+                
+                # Add to history to prevent duplicates in subsequent slots
+                my_last_posts.insert(0, post_text)
                 
                 final_text = auto_replace_links(post_text)
                 photo_filename = f"media_queue/psy_{next_id}.jpg"
+                # Шукаємо оригінальну картинку з RSS для fallback
+                rss_fallback_url = next((item.get('image_url') for item in news_list if item.get('image_url')), None)
+                img_ok = await generate_ai_image(image_prompt, "psy", photo_filename, image_url=rss_fallback_url)
                 
-                img_ok = await generate_ai_image(final_text, "psy", photo_filename)
-                if not img_ok:
-                    if chosen_item and chosen_item["has_photo"]:
-                        try:
-                            photo_filename = await client.download_media(chosen_item["message_obj"], file=photo_filename)
-                            if contains_russian_text(photo_filename):
-                                print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
-                                try: os.remove(photo_filename)
-                                except Exception: pass
-                                photo_filename = f"media_queue/psy_{next_id}.jpg"
-                                img_ok = await generate_ai_image(final_text, "psy", photo_filename)
-                            else:
-                                apply_brand_frame(photo_filename, "psy")
-                                img_ok = True
-                        except Exception:
-                            photo_filename = ""
-                    else:
-                        photo_filename = ""
-                        
-                if not img_ok and cat == "Morning Motivation" and os.path.exists("psy_default.png"):
+                if not img_ok and cat == "Morning Motivation" and os.path.exists(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "psy_default.png")):
                     import shutil
-                    shutil.copy("psy_default.png", photo_filename)
+                    shutil.copy(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "psy_default.png"), photo_filename)
                     apply_brand_frame(photo_filename, "psy")
                     img_ok = True
+                    
+                if not img_ok:
+                    photo_filename = ""
 
                 row = [str(next_id), "psy", cat, final_text, photo_filename if img_ok else "", "pending", now_str, "", ""]
                 ws.append_row(row)
@@ -819,58 +998,59 @@ async def post_news_report(client):
     print("🚀 Початок процесу денної публікації новин трейдингу...")
     bot = Bot(token=config.BOT_TOKEN)
     try:
-        news_items = await get_latest_news_texts(client)
-        if not news_items:
-            print("⚠️ Новин трейдингу не знайдено.")
+        # 1. Fetch RSS news
+        rss_urls = getattr(config, 'TRADING_REPORTER_RSS_URLS', [])
+        news_list = fetch_rss_news(rss_urls)
+        if not news_list:
+            print("⚠️ Новин трейдингу з RSS не знайдено.")
             return
             
-        post_text, chosen_item = select_and_rewrite_news_with_gemini(news_items)
-        if not post_text:
+        # 2. Fetch last 15 posts
+        my_last_posts = await get_my_last_posts(client, config.TARGET_CHANNEL, limit=15)
+        
+        # 3. select and compile
+        post_data = select_and_compile_with_gemini(news_list, my_last_posts, "Trading & Finance News", "trading")
+        if not post_data or not post_data.get("post_text"):
             print("❌ Не вдалося згенерувати пост трейдингу.")
             return
+            
+        post_text = post_data["post_text"]
+        image_prompt = post_data["image_prompt"]
         
         post_text = apply_referral_links(post_text)
         post_text = auto_replace_links(post_text)
         
         # Генерація картинки через ІІ з накладенням рамки
         photo_path = "news_photo.jpg"
-        generated_ok = await generate_ai_image(post_text, "trading", photo_path)
-        if not generated_ok:
-            # Запасний варіант: якщо у донора є фото, скачуємо його та рамкуємо
-            if chosen_item and chosen_item["has_photo"]:
-                try:
-                    photo_path = await client.download_media(chosen_item["message_obj"], file="news_photo.jpg")
-                    if contains_russian_text(photo_path):
-                        print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
-                        try: os.remove(photo_path)
-                        except Exception: pass
-                        photo_path = "news_photo.jpg"
-                        generated_ok = await generate_ai_image(post_text, "trading", photo_path)
-                    else:
-                        apply_brand_frame(photo_path, "trading")
-                        generated_ok = True
-                except Exception as e:
-                    print(f"⚠️ Помилка скачування оригінальної картинки: {e}")
-                    photo_path = None
-            else:
-                photo_path = None
-        
+        # Шукаємо оригінальну картинку з RSS для fallback
+        rss_fallback_url = next((item.get('image_url') for item in news_list if item.get('image_url')), None)
+        generated_ok = await generate_ai_image(image_prompt, "trading", photo_path, image_url=rss_fallback_url)
         if not generated_ok:
             photo_path = None
 
-
         # Публікація
-        if photo_path and os.path.exists(photo_path):
-            if len(post_text) <= 1024:
-                await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path), caption=post_text, parse_mode='HTML')
+        try:
+            if photo_path and os.path.exists(photo_path):
+                if len(post_text) <= 1024:
+                    await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path), caption=post_text, parse_mode='HTML')
+                else:
+                    msg_photo = await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path))
+                    await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML', reply_to_message_id=msg_photo.message_id)
+                try: os.remove(photo_path)
+                except Exception: pass
             else:
-                msg_photo = await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path))
-                await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML', reply_to_message_id=msg_photo.message_id)
-            try: os.remove(photo_path)
-            except Exception: pass
-        else:
-            await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML')
-        print("✅ Денний огляд новин трейдингу опубліковано!")
+                await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML')
+            print("✅ Денний огляд новин трейдингу опубліковано!")
+        except Exception as e:
+            print(f"❌ Помилка надсилання в Telegram: {e}")
+            # Mock fallback
+            temp_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp")
+            os.makedirs(temp_log_dir, exist_ok=True)
+            mock_post_path = os.path.join(temp_log_dir, "mock_post_trading.txt")
+            with open(mock_post_path, "w", encoding="utf-8") as f:
+                f.write(f"=== MOCK POST ===\nChannel: trading\nPhoto: {photo_path}\nText:\n{post_text}")
+            print(f"💾 Пост збережено локально: {mock_post_path}")
+            
     except Exception as e:
         print(f"❌ Помилка в процесі публікації новин трейдингу: {e}")
     finally:
@@ -913,42 +1093,61 @@ async def post_ai_category_update(client, category_name):
                             print(f"⚠️ [QUEUE] Не вдалося оновити шлях до картинки в таблиці: {e}")
                 
                 msg = None
-                if photo_path and os.path.exists(photo_path):
-                    msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
-                    try: os.remove(photo_path)
-                    except Exception: pass
-                else:
-                    msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
-                
-                now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
-                channel_username = config.AI_TARGET_CHANNEL.replace('@', '')
-                post_link = f"https://t.me/{channel_username}/{msg.id}" if msg else ""
-                
-                ws.update_cell(row_idx, 6, "published")
-                ws.update_cell(row_idx, 8, now_str)
-                ws.update_cell(row_idx, 9, post_link)
-                
-                print(f"✅ [QUEUE] Пост {queued_post[0]} успішно опубліковано з черги!")
+                try:
+                    if not client.is_connected():
+                        await client.connect()
+                    if photo_path and os.path.exists(photo_path):
+                        msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
+                        try: os.remove(photo_path)
+                        except Exception: pass
+                    else:
+                        msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
+                    
+                    now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
+                    channel_username = config.AI_TARGET_CHANNEL.replace('@', '')
+                    post_link = f"https://t.me/{channel_username}/{msg.id}" if msg else ""
+                    
+                    ws.update_cell(row_idx, 6, "published")
+                    ws.update_cell(row_idx, 8, now_str)
+                    ws.update_cell(row_idx, 9, post_link)
+                    print(f"✅ [QUEUE] Пост {queued_post[0]} успішно опубліковано з черги!")
+                except Exception as e:
+                    print(f"❌ [QUEUE] Помилка надсилання в Telegram з черги: {e}")
+                    # Mock fallback
+                    temp_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp")
+                    os.makedirs(temp_log_dir, exist_ok=True)
+                    mock_post_path = os.path.join(temp_log_dir, f"mock_post_queue_ai_{queued_post[0]}.txt")
+                    with open(mock_post_path, "w", encoding="utf-8") as f:
+                        f.write(f"=== MOCK QUEUED POST ===\nChannel: ai\nCategory: {category_name}\nPhoto: {photo_path}\nText:\n{final_post_text}")
+                    print(f"💾 Пост збережено локально: {mock_post_path}")
                 return
         except Exception as e:
             print(f"⚠️ [QUEUE] Помилка роботи з чергою Google Таблиць: {e}. Переходжу до живого автопостингу...")
 
         from telethon.tl.functions.channels import GetFullChannelRequest
         
-        news_list = await get_latest_ai_posts(client)
+        rss_urls = getattr(config, 'AI_REPORTER_RSS_URLS', [])
+        if not rss_urls:
+            rss_urls = getattr(config, 'REPORTER_RSS_URLS', [])
+        news_list = fetch_rss_news(rss_urls)
         if not news_list:
-            print("⚠️ ШІ-постів у донорів не знайдено.")
+            print("⚠️ ШІ-постів у RSS не знайдено.")
             return
 
-        post_text, chosen_item, extracted_prompt = select_and_rewrite_ai_with_gemini(news_list, category_name)
-        if not post_text:
+        my_last_posts = await get_my_last_posts(client, config.AI_TARGET_CHANNEL, limit=15)
+        post_data = select_and_compile_with_gemini(news_list, my_last_posts, category_name, "ai")
+        if not post_data or not post_data.get("post_text"):
             print("❌ Не вдалося згенерувати ШІ-пост.")
             return
 
+        post_text = post_data["post_text"]
+        image_prompt = post_data["image_prompt"]
 
         # Перевіряємо, чи є підв'язана група для коментарів
         has_linked_chat = False
         try:
+            if not client.is_connected():
+                await client.connect()
             c_entity = await client.get_entity(config.AI_TARGET_CHANNEL)
             full_chat_info = await client(GetFullChannelRequest(c_entity))
             if full_chat_info.full_chat.linked_chat_id:
@@ -959,67 +1158,68 @@ async def post_ai_category_update(client, category_name):
         # Формуємо фінальний текст
         final_post_text = post_text
         
-        # Якщо є промпт, але коментарі відсутні — додаємо промпт безпосередньо в пост!
+        # Витягуємо промпт
+        extracted_prompt = None
+        if "[PROMPT_START]" in post_text and "[PROMPT_END]" in post_text:
+            try:
+                parts = post_text.split("[PROMPT_START]")
+                final_post_text = parts[0].strip()
+                prompt_part = parts[1].split("[PROMPT_END]")[0].strip()
+                extracted_prompt = prompt_part
+            except Exception:
+                pass
+
         if extracted_prompt and not has_linked_chat:
-            # Адаптуємо заклик до дії: замінюємо коментарі на пост
             final_post_text = final_post_text.replace("у коментарях нижче", "прямо з поста нижче")
             final_post_text = final_post_text.replace("в коментарях нижче", "прямо з поста нижче")
             final_post_text = final_post_text.replace("в коментарях", "прямо з поста")
             final_post_text = final_post_text.replace("в комментариях ниже", "прямо из поста ниже")
             final_post_text = final_post_text.replace("в комментариях", "прямо из поста")
-            
-            # Додаємо гарно оформлений промпт у тегах <code> (копіювання одним тапом!)
             final_post_text += f"\n\n📋 <b>Промпт для генерації:</b>\n<code>{extracted_prompt}</code>"
 
         final_post_text = auto_replace_links(final_post_text)
 
         # Генерація картинки через ІІ з накладенням рамки
         photo_path = "temp_ai_post.jpg"
-        generated_ok = await generate_ai_image(final_post_text, "ai", photo_path)
-        if not generated_ok:
-            # Запасний варіант: якщо у донора є фото, скачуємо його та рамкуємо
-            if chosen_item and chosen_item["has_photo"]:
-                try:
-                    photo_path = await client.download_media(chosen_item["message_obj"], file="temp_ai_post.jpg")
-                    if contains_russian_text(photo_path):
-                        print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
-                        try: os.remove(photo_path)
-                        except Exception: pass
-                        photo_path = "temp_ai_post.jpg"
-                        generated_ok = await generate_ai_image(final_post_text, "ai", photo_path)
-                    else:
-                        apply_brand_frame(photo_path, "ai")
-                        generated_ok = True
-                except Exception as e:
-                    print(f"⚠️ Помилка скачування оригінальної картинки: {e}")
-                    photo_path = None
-            else:
-                photo_path = None
-        
+        # Шукаємо оригінальну картинку з RSS для fallback
+        rss_fallback_url = next((item.get('image_url') for item in news_list if item.get('image_url')), None)
+        generated_ok = await generate_ai_image(image_prompt, "ai", photo_path, image_url=rss_fallback_url)
         if not generated_ok:
             photo_path = None
 
-
         # Публікуємо в ІИ-канал через Telethon (від імені користувача Клава!)
+        print(f"📤 Надсилаю ШІ-пост '{category_name}' в канал {config.AI_TARGET_CHANNEL}...")
         msg = None
-        if photo_path and os.path.exists(photo_path):
-            msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
-            try: os.remove(photo_path)
-            except Exception: pass
-        else:
-            msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
-            
-        print(f"✅ ШІ-пост '{category_name}' успішно опубліковано!")
-
-        # Якщо коментарі є і знайдено промпт, публікуємо його у коментарях
-        if msg and extracted_prompt and has_linked_chat:
-            try:
-                await asyncio.sleep(3.0)  # Маленька затримка для надійності
-                await client.send_message(entity=config.AI_TARGET_CHANNEL, message=extracted_prompt, comment_to=msg)
-                print("✅ Промпт успішно опубліковано в коментарях!")
-            except Exception as e:
-                print(f"⚠️ Не вдалося опублікувати промпт в коментарях: {e}")
+        try:
+            if not client.is_connected():
+                await client.connect()
+            if photo_path and os.path.exists(photo_path):
+                msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
+                try: os.remove(photo_path)
+                except Exception: pass
+            else:
+                msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
                 
+            print(f"✅ ШІ-пост '{category_name}' успішно опубліковано!")
+
+            # Якщо коментарі є і знайдено промпт, публікуємо його у коментарях
+            if msg and extracted_prompt and has_linked_chat:
+                try:
+                    await asyncio.sleep(3.0)  # Маленька затримка для надійності
+                    await client.send_message(entity=config.AI_TARGET_CHANNEL, message=extracted_prompt, comment_to=msg)
+                    print("✅ Промпт успішно опубліковано в коментарях!")
+                except Exception as e:
+                    print(f"⚠️ Не вдалося опублікувати промпт в коментарях: {e}")
+        except Exception as e:
+            print(f"❌ Помилка надсилання в Telegram (можливо AuthKeyDuplicatedError): {e}")
+            # Mock fallback
+            temp_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp")
+            os.makedirs(temp_log_dir, exist_ok=True)
+            mock_post_path = os.path.join(temp_log_dir, f"mock_post_ai_{category_name.replace(' ', '_')}.txt")
+            with open(mock_post_path, "w", encoding="utf-8") as f:
+                f.write(f"=== MOCK POST ===\nChannel: ai\nCategory: {category_name}\nPhoto: {photo_path}\nText:\n{final_post_text}")
+            print(f"💾 Пост збережено локально: {mock_post_path}")
+            
     except Exception as e:
         print(f"❌ Помилка в процесі публікації ШІ-категорії '{category_name}': {e}")
 
@@ -1114,14 +1314,14 @@ async def post_weekly_digest(client):
                         
         # Якщо не вийшло згенерувати і немає у донорів, спробуємо дефолтні малюнки
         if not generated_ok and (not photo_path or not os.path.exists(photo_path)):
-            if os.path.exists("sunday_digest_default.png"):
+            if os.path.exists(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "sunday_digest_default.png")):
                 import shutil
-                shutil.copy("sunday_digest_default.png", "digest_photo.png")
+                shutil.copy(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "sunday_digest_default.png"), "digest_photo.png")
                 photo_path = "digest_photo.png"
                 generated_ok = True
-            elif os.path.exists("morning_default.png"):
+            elif os.path.exists(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "morning_default.png")):
                 import shutil
-                shutil.copy("morning_default.png", "digest_photo.png")
+                shutil.copy(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "morning_default.png"), "digest_photo.png")
                 photo_path = "digest_photo.png"
                 apply_brand_frame(photo_path, "trading")
                 generated_ok = True
@@ -1289,93 +1489,104 @@ async def post_psy_category_update(client, category_name):
                             print(f"⚠️ [QUEUE] Не вдалося оновити шлях до картинки в таблиці: {e}")
                 
                 # Публікуємо через Telethon (від імені користувача Клава)
-                if photo_path and os.path.exists(photo_path):
-                    await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
-                    try: os.remove(photo_path)
-                    except Exception: pass
-                else:
-                    await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
-                
-                now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
-                
-                # Отримуємо ID останнього надісланого повідомлення в каналі для формування лінку
-                post_link = ""
                 try:
-                    async for msg in client.iter_messages(config.PSY_TARGET_CHANNEL, limit=1):
-                        channel_username = config.PSY_TARGET_CHANNEL.replace('@', '')
-                        post_link = f"https://t.me/{channel_username}/{msg.id}"
-                        break
-                except Exception:
-                    pass
-                
-                ws.update_cell(row_idx, 6, "published")
-                ws.update_cell(row_idx, 8, now_str)
-                ws.update_cell(row_idx, 9, post_link)
-                
-                print(f"✅ [QUEUE] Пост {queued_post[0]} успішно опубліковано з черги!")
+                    if not client.is_connected():
+                        await client.connect()
+                    if photo_path and os.path.exists(photo_path):
+                        await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
+                        try: os.remove(photo_path)
+                        except Exception: pass
+                    else:
+                        await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
+                    
+                    now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
+                    
+                    # Отримуємо ID останнього надісланого повідомлення в каналі для формування лінку
+                    post_link = ""
+                    try:
+                        async for msg in client.iter_messages(config.PSY_TARGET_CHANNEL, limit=1):
+                            channel_username = config.PSY_TARGET_CHANNEL.replace('@', '')
+                            post_link = f"https://t.me/{channel_username}/{msg.id}"
+                            break
+                    except Exception:
+                        pass
+                    
+                    ws.update_cell(row_idx, 6, "published")
+                    ws.update_cell(row_idx, 8, now_str)
+                    ws.update_cell(row_idx, 9, post_link)
+                    print(f"✅ [QUEUE] Пост {queued_post[0]} успішно опубліковано з черги!")
+                except Exception as e:
+                    print(f"❌ [QUEUE] Помилка надсилання в Telegram з черги: {e}")
+                    # Mock fallback
+                    temp_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp")
+                    os.makedirs(temp_log_dir, exist_ok=True)
+                    mock_post_path = os.path.join(temp_log_dir, f"mock_post_queue_psy_{queued_post[0]}.txt")
+                    with open(mock_post_path, "w", encoding="utf-8") as f:
+                        f.write(f"=== MOCK QUEUED POST ===\nChannel: psy\nCategory: {category_name}\nPhoto: {photo_path}\nText:\n{final_post_text}")
+                    print(f"💾 Пост збережено локально: {mock_post_path}")
                 return
         except Exception as e:
             print(f"⚠️ [QUEUE] Помилка роботи з чергою Google Таблиць: {e}. Переходжу до живого автопостингу...")
 
-        news_list = await get_latest_psy_posts(client)
+        rss_urls = getattr(config, 'PSY_REPORTER_RSS_URLS', [])
+        news_list = fetch_rss_news(rss_urls)
         if not news_list:
-            print("⚠️ Постів з психології у донорів не знайдено.")
+            print("⚠️ Постів з психології у RSS не знайдено.")
             return
 
-        post_text, chosen_item = select_and_rewrite_psy_with_gemini(news_list, category_name)
-        if not post_text:
-            print("❌ Не вдалося згенерувати пост з психології.")
+        my_last_posts = await get_my_last_posts(client, config.PSY_TARGET_CHANNEL, limit=15)
+        post_data = select_and_compile_with_gemini(news_list, my_last_posts, category_name, "psy")
+        if not post_data or not post_data.get("post_text"):
+            print("❌ Не вдалося згенерувати post з психології.")
             return
 
+        post_text = post_data["post_text"]
+        image_prompt = post_data["image_prompt"]
 
-        # Не додаємо сигнатуру за запитом користувача
         final_post_text = post_text
         final_post_text = auto_replace_links(final_post_text)
 
         # Генерація картинки через ІІ з накладенням рамки
         photo_path = "temp_psy_post.jpg"
-        generated_ok = await generate_ai_image(final_post_text, "psy", photo_path)
+        # Шукаємо оригінальну картинку з RSS для fallback
+        rss_fallback_url = next((item.get('image_url') for item in news_list if item.get('image_url')), None)
+        generated_ok = await generate_ai_image(image_prompt, "psy", photo_path, image_url=rss_fallback_url)
         if not generated_ok:
-            # Запасний варіант: якщо у донора є фото, скачуємо його та рамкуємо
-            if chosen_item and chosen_item["has_photo"]:
-                try:
-                    photo_path = await client.download_media(chosen_item["message_obj"], file="temp_psy_post.jpg")
-                    if contains_russian_text(photo_path):
-                        print("🚫 Скачана картинка містить російський текст! Відхиляємо та пробуємо примусово перегенерувати через ШІ...")
-                        try: os.remove(photo_path)
-                        except Exception: pass
-                        photo_path = "temp_psy_post.jpg"
-                        generated_ok = await generate_ai_image(final_post_text, "psy", photo_path)
-                    else:
-                        apply_brand_frame(photo_path, "psy")
-                        generated_ok = True
-                except Exception as e:
-                    print(f"⚠️ Помилка скачування оригінальної картинки: {e}")
-                    photo_path = None
-            else:
-                photo_path = None
+            photo_path = None
                 
         # Дефолтний дежурний малюнок, якщо нічого не підібрали і ІІ не спрацював
         if not generated_ok and (not photo_path or not os.path.exists(photo_path)):
-            if category_name == "Morning Motivation" and os.path.exists("psy_default.png"):
-                photo_path = "psy_default.png"
+            if category_name == "Morning Motivation" and os.path.exists(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "psy_default.png")):
+                photo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "psy_default.png")
                 print("🎨 Використовую дежурний малюнок psy_default.png за замовчуванням для ранкової мотивації!")
             else:
                 photo_path = None
                 print(f"📝 Фото відсутнє для категорії '{category_name}'. Надсилаю як текстовий пост.")
 
-
         # Публікуємо в канал через Telethon (від імені користувача Клава!)
-        if photo_path and os.path.exists(photo_path):
-            is_default = (photo_path == "psy_default.png")
-            await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
-            if not is_default:
-                try: os.remove(photo_path)
-                except Exception: pass
-        else:
-            await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
+        print(f"📤 Надсилаю психологічний пост '{category_name}' в канал {config.PSY_TARGET_CHANNEL}...")
+        try:
+            if not client.is_connected():
+                await client.connect()
+            if photo_path and os.path.exists(photo_path):
+                is_default = (photo_path.endswith("psy_default.png"))
+                await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
+                if not is_default:
+                    try: os.remove(photo_path)
+                    except Exception: pass
+            else:
+                await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
+            print(f"✅ Психологічний пост '{category_name}' успешно опубліковано!")
+        except Exception as e:
+            print(f"❌ Помилка надсилання в Telegram (можливо AuthKeyDuplicatedError): {e}")
+            # Mock fallback
+            temp_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp")
+            os.makedirs(temp_log_dir, exist_ok=True)
+            mock_post_path = os.path.join(temp_log_dir, f"mock_post_psy_{category_name.replace(' ', '_')}.txt")
+            with open(mock_post_path, "w", encoding="utf-8") as f:
+                f.write(f"=== MOCK POST ===\nChannel: psy\nCategory: {category_name}\nPhoto: {photo_path}\nText:\n{final_post_text}")
+            print(f"💾 Пост збережено локально: {mock_post_path}")
             
-        print(f"✅ Психологічний пост '{category_name}' успешно опубліковано!")
     except Exception as e:
         print(f"❌ Помилка в процесі публікації психологічної категорії '{category_name}': {e}")
 

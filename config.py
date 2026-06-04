@@ -52,6 +52,25 @@ NEWS_DONOR_CHANNELS = [
     -1001593088122
 ]
 
+# Джерела RSS для автономного пошуку новин (AI-Репортер)
+TRADING_REPORTER_RSS_URLS = [
+    "https://cointelegraph.com/rss",
+    "https://incrypted.com/feed/",
+    "https://forklog.com/feed"
+]
+
+AI_REPORTER_RSS_URLS = [
+    "https://techcrunch.com/category/artificial-intelligence/feed/",
+    "https://venturebeat.com/category/ai/feed/",
+    "https://itc.ua/feed/"
+]
+
+PSY_REPORTER_RSS_URLS = [
+    "https://www.psychologytoday.com/us/front/feed",
+    "https://psychcentral.com/feed",
+    "https://ideas.ted.com/feed/"
+]
+
 # Канали для розумного автокомментування трейдингу (Gemini) - ВИМКНЕНО
 COMMENT_CHANNELS = []
 

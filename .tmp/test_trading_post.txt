@@ -1,0 +1,9 @@
+=== TEST POST ===
+Category: Trading Trends
+Image Prompt: A digital Bitcoin icon falling rapidly, leaving a trail of red numbers and charts. The background features abstract, glitchy representations of financial data and worried, anonymous traders' silhouettes. Dynamic, high-contrast lighting, conveying market downturn.
+
+Text:
+<b><a href="https://t.me/sim_sorok">Сім сорок</a></b> спостерігає: ринки криптовалют знову влаштували справжнє шоу, і не для всіх з хепі-ендом. Біткоїн занурився нижче $62 000, а обсяг ліквідацій за добу на ф'ючерсному ринку перевищив вражаючі $1.6 мільярда, переважно за рахунок лонг-позицій. Цей обвал пов'язаний з тривалим відтоком капіталу з американських спотових Bitcoin ETF, який триває вже 13 сесій поспіль і сягнув $4.4 мільярда. Аналітики вказують на комбінацію факторів: відсутність інституційної підтримки, геополітична нестабільність та пробиття ключових рівнів. Навіть на Deribit зростає інтерес до пут-опціонів, що свідчить про посилення ведмежих настроїв. Чи готується BTC до тесту $60 000? Час покаже. А якщо волатильність викликає занепокоєння, про ментальне здоров'я подбає <b><a href="https://t.me/ncux_olo_guY">Нейро-Апгрейд</a></b>.
+
+<i>Джерела: <a href="https://cointelegraph.com/news/bitcoin-etfs-4-4-billion-outflows-13-day-streak?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound">1</a>, <a href="https://incrypted.com/rasprodazha-panika-i-bitkoin-na-grani-chto-proishodit-s-kriptorynkom/">2</a>, <a href="https://forklog.com/news/bitkoin-obvalilsya-nizhe-62-000">3</a></i>
+#TradingTrends #Bitcoin #CryptoMarket #ETF #Liquidations #MarketAnalysis

@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import os
 from PIL import Image
 
@@ -23,10 +26,10 @@ def process_logo(logo_path, opacity=0.8):
     return logo
 
 def create_sample():
-    main_img_path = r"F:\Cem_copok\photo.jpg"
-    logo_path = r"F:\Cem_copok\logo.jpg"
-    out_br = r"C:\Users\Admin\.gemini\antigravity\brain\6d9e3217-4ee3-484b-9388-5f870b0fcb5b\sample_br.png"
-    out_tc = r"C:\Users\Admin\.gemini\antigravity\brain\6d9e3217-4ee3-484b-9388-5f870b0fcb5b\sample_tc.png"
+    main_img_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "photo.jpg")
+    logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "logo.jpg")
+    out_br = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "sample_br.png")
+    out_tc = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "sample_tc.png")
     
     if not os.path.exists(main_img_path):
         main_img = Image.new('RGB', (1024, 768), color = (73, 109, 137))

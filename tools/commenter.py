@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 import requests
 from telethon import events
@@ -101,7 +104,7 @@ async def send_safe_reaction(client, chat_id, message_id, emoticon=None):
 def apply_watermark(photo_path):
     """Накладає брендований водяний знак logo.jpg на фотографію"""
     try:
-        logo_file = "logo.jpg"
+        logo_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp", "logo.jpg")
         if photo_path and os.path.exists(photo_path) and os.path.exists(logo_file):
             print("🎨 Накладаю водяний знак бренду...")
             main_img = Image.open(photo_path).convert("RGBA")
@@ -145,7 +148,7 @@ def auto_replace_links(text):
     pattern = r'https?://t\.me/l_ibrar_y/(\d+)'
     return re.sub(pattern, r'https://t.me/librar_ian_bot?start=\1', text)
 
-def register_commenter(client):
+async def register_commenter(client):
     """Реєструє обробники подій Telethon для всієї екосистеми супер-бота"""
     
     # ---------------------------------------------------------------------
@@ -227,7 +230,15 @@ def register_commenter(client):
     # В. Режим ДОНОРА для акцій Трейдингу (Binance)
     # ---------------------------------------------------------------------
     if TRADING_DONOR_CHANNELS:
-        @client.on(events.NewMessage(chats=TRADING_DONOR_CHANNELS))
+        valid_trading_donors = []
+        for ch in TRADING_DONOR_CHANNELS:
+            try:
+                await client.get_input_entity(ch)
+                valid_trading_donors.append(ch)
+                print(f"✅ Канал-донор трейдингу '{ch}' успішно перевірений та доступний.")
+            except Exception as e:
+                print(f"⚠️ Канал-донор трейдингу '{ch}' пропущено: {e}")
+                
         async def trading_donor_handler(event):
             try:
                 chat = await event.get_chat()
@@ -254,7 +265,7 @@ def register_commenter(client):
                 # Картинка + Водяний знак
                 photo_path = None
                 if event.message.photo:
-                    photo_path = await client.download_media(event.message, file="temp_trade_promo.jpg")
+                    photo_path = await client.download_media(event.message, file=".tmp/temp_trade_promo.jpg")
                     apply_watermark(photo_path)
                 
                 await client.send_message(entity=config.TARGET_CHANNEL, message=post_text, file=photo_path, parse_mode='html')
@@ -262,6 +273,10 @@ def register_commenter(client):
                 if photo_path and os.path.exists(photo_path): os.remove(photo_path)
             except Exception as e:
                 print(f"❌ Помилка донора трейдингу: {e}")
+
+        if valid_trading_donors:
+            print(f"📡 Авторепостер трейдингу налаштовано для доступних каналів-донорів: {valid_trading_donors}")
+            client.add_event_handler(trading_donor_handler, events.NewMessage(chats=valid_trading_donors))
 
     # ---------------------------------------------------------------------
     # Г. Авторепостер для Психології (режим ДОНОРА з Gemini рерайтом) - ВИМКНЕНО НА КОРИСТЬ РОЗКЛАДУ

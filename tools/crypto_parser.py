@@ -1,7 +1,10 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import requests
 import config
 from datetime import datetime
-from translator import translate_to_ukrainian
+from tools.translator import translate_to_ukrainian
 
 def get_crypto_prices():
     """Получает цены с CoinMarketCap через бесплатное API"""
