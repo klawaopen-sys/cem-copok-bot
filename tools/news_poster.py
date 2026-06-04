@@ -4,9 +4,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import asyncio
 import requests
 import urllib.parse
-from telethon import TelegramClient
+from telethon import TelegramClient, Button
 from aiogram import Bot
-from aiogram.types import FSInputFile
+from aiogram.types import FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 import config
 import pytz
 from datetime import datetime
@@ -179,7 +179,7 @@ def select_and_compile_with_gemini(news_list, my_last_posts, category_name, chan
         f"4. Якщо тема повністю унікальна — скомпілюй з цих джерел один якісний пост {target_lang}.\n"
         "5. Пост має бути лаконічним і СТРОГО до 650-700 символів (разом із пробілами).\n"
         "6. Використовуй ТІЛЬКИ HTML-теги для виділення жирного тексту: <b>жирний текст</b>. НІКОЛИ не використовуй маркдаун із зірочками.\n"
-        "7. КРИТИЧНО: В кінці поста додай посилання на джерела (використовуй посилання з пулу новин) у вигляді красивого списку HTML: <i>Джерела: <a href=\"link1\">1</a>, <a href=\"link2\">2</a>, <a href=\"link3\">3</a></i>. ЗАБОРОНЕНО виводити сирі посилання (URL) у круглих дужках або у вигляді тексту! Будь-які URL мають бути приховані всередині тегу <a href=\"...\">. Наприклад, замість \"1 (https://...)\" пиши тільки \"<a href=\\\"https://...\\\">1</a>\".\n"
+        "7. КРИТИЧНО: Заборонено додавати будь-які посилання на джерела, списки джерел чи слово 'Джерела' в кінці або в тілі поста. Текст повинен закінчуватися без посилань на джерела новин.\n"
         f"{extra_rules}\n"
         "8. Обов'язково додай опис сцени для генератора зображень англійською мовою (IMAGE_PROMPT). Вона має бути суто візуальною, без тексту.\n\n"
         "Суворий формат відповіді:\n"
@@ -193,7 +193,7 @@ def select_and_compile_with_gemini(news_list, my_last_posts, category_name, chan
     )
 
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
@@ -539,7 +539,7 @@ def contains_russian_text(image_path):
             "Do not write any other words, explanations, or markdown. Only output 'YES' or 'NO'."
         )
         
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
         
         payload = {
@@ -1020,6 +1020,14 @@ async def post_news_report(client):
         post_text = apply_referral_links(post_text)
         post_text = auto_replace_links(post_text)
         
+        # Додаємо сигнатуру трейдингу
+        post_text += "\n\n📊 <b>НЕ ВСТИГАЄТЕ ЗАПИСУВАТИ ДУМКИ ПІД ЧАС ТОРГІВЛІ?</b>"
+        
+        # Створюємо клавіатуру з кнопкою завантаження віджета
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="завантажити🎙️VOICE WIDGE", url="https://t.me/te_shoo_treba/194")]
+        ])
+        
         # Генерація картинки через ІІ з накладенням рамки
         photo_path = "news_photo.jpg"
         # Шукаємо оригінальну картинку з RSS для fallback
@@ -1032,14 +1040,14 @@ async def post_news_report(client):
         try:
             if photo_path and os.path.exists(photo_path):
                 if len(post_text) <= 1024:
-                    await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path), caption=post_text, parse_mode='HTML')
+                    await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path), caption=post_text, parse_mode='HTML', reply_markup=reply_markup)
                 else:
                     msg_photo = await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path))
-                    await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML', reply_to_message_id=msg_photo.message_id)
+                    await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML', reply_to_message_id=msg_photo.message_id, reply_markup=reply_markup)
                 try: os.remove(photo_path)
                 except Exception: pass
             else:
-                await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML')
+                await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML', reply_markup=reply_markup)
             print("✅ Денний огляд новин трейдингу опубліковано!")
         except Exception as e:
             print(f"❌ Помилка надсилання в Telegram: {e}")
@@ -1097,11 +1105,22 @@ async def post_ai_category_update(client, category_name):
                     if not client.is_connected():
                         await client.connect()
                     if photo_path and os.path.exists(photo_path):
-                        msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
+                        msg = await client.send_message(
+                            entity=config.AI_TARGET_CHANNEL,
+                            message=final_post_text,
+                            file=photo_path,
+                            parse_mode='html',
+                            buttons=[[Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194")]]
+                        )
                         try: os.remove(photo_path)
                         except Exception: pass
                     else:
-                        msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
+                        msg = await client.send_message(
+                            entity=config.AI_TARGET_CHANNEL,
+                            message=final_post_text,
+                            parse_mode='html',
+                            buttons=[[Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194")]]
+                        )
                     
                     now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
                     channel_username = config.AI_TARGET_CHANNEL.replace('@', '')
@@ -1194,11 +1213,22 @@ async def post_ai_category_update(client, category_name):
             if not client.is_connected():
                 await client.connect()
             if photo_path and os.path.exists(photo_path):
-                msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
+                msg = await client.send_message(
+                    entity=config.AI_TARGET_CHANNEL,
+                    message=final_post_text,
+                    file=photo_path,
+                    parse_mode='html',
+                    buttons=[[Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194")]]
+                )
                 try: os.remove(photo_path)
                 except Exception: pass
             else:
-                msg = await client.send_message(entity=config.AI_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
+                msg = await client.send_message(
+                    entity=config.AI_TARGET_CHANNEL,
+                    message=final_post_text,
+                    parse_mode='html',
+                    buttons=[[Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194")]]
+                )
                 
             print(f"✅ ШІ-пост '{category_name}' успішно опубліковано!")
 
@@ -1297,6 +1327,14 @@ async def post_weekly_digest(client):
         digest_text = apply_referral_links(digest_text)
         digest_text = auto_replace_links(digest_text)
         
+        # Додаємо сигнатуру трейдингу
+        digest_text += "\n\n📊 <b>НЕ ВСТИГАЄТЕ ЗАПИСУВАТИ ДУМКИ ПІД ЧАС ТОРГІВЛІ?</b>"
+        
+        # Створюємо клавіатуру з кнопкою завантаження віджета
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="завантажити🎙️VOICE WIDGE", url="https://t.me/te_shoo_treba/194")]
+        ])
+        
         # Генерація картинки через ІІ з накладенням рамки
         photo_path = "digest_photo.jpg"
         generated_ok = await generate_ai_image(digest_text, "trading", photo_path)
@@ -1335,14 +1373,14 @@ async def post_weekly_digest(client):
         # Публікація в канал
         if photo_path and os.path.exists(photo_path):
             if len(digest_text) <= 1024:
-                await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path), caption=digest_text, parse_mode='HTML')
+                await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path), caption=digest_text, parse_mode='HTML', reply_markup=reply_markup)
             else:
                 msg_photo = await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path))
-                await bot.send_message(chat_id=config.TARGET_CHANNEL, text=digest_text, parse_mode='HTML', reply_to_message_id=msg_photo.message_id)
+                await bot.send_message(chat_id=config.TARGET_CHANNEL, text=digest_text, parse_mode='HTML', reply_to_message_id=msg_photo.message_id, reply_markup=reply_markup)
             try: os.remove(photo_path)
             except Exception: pass
         else:
-            await bot.send_message(chat_id=config.TARGET_CHANNEL, text=digest_text, parse_mode='HTML')
+            await bot.send_message(chat_id=config.TARGET_CHANNEL, text=digest_text, parse_mode='HTML', reply_markup=reply_markup)
             
         print("✅ Щотижневий фінансовий дайджест успішно опубліковано!")
     except Exception as e:
@@ -1493,11 +1531,22 @@ async def post_psy_category_update(client, category_name):
                     if not client.is_connected():
                         await client.connect()
                     if photo_path and os.path.exists(photo_path):
-                        await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
+                        await client.send_message(
+                            entity=config.PSY_TARGET_CHANNEL,
+                            message=final_post_text,
+                            file=photo_path,
+                            parse_mode='html',
+                            buttons=[[Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot")]]
+                        )
                         try: os.remove(photo_path)
                         except Exception: pass
                     else:
-                        await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
+                        await client.send_message(
+                            entity=config.PSY_TARGET_CHANNEL,
+                            message=final_post_text,
+                            parse_mode='html',
+                            buttons=[[Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot")]]
+                        )
                     
                     now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
                     
@@ -1570,12 +1619,23 @@ async def post_psy_category_update(client, category_name):
                 await client.connect()
             if photo_path and os.path.exists(photo_path):
                 is_default = (photo_path.endswith("psy_default.png"))
-                await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, file=photo_path, parse_mode='html')
+                await client.send_message(
+                    entity=config.PSY_TARGET_CHANNEL,
+                    message=final_post_text,
+                    file=photo_path,
+                    parse_mode='html',
+                    buttons=[[Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot")]]
+                )
                 if not is_default:
                     try: os.remove(photo_path)
                     except Exception: pass
             else:
-                await client.send_message(entity=config.PSY_TARGET_CHANNEL, message=final_post_text, parse_mode='html')
+                await client.send_message(
+                    entity=config.PSY_TARGET_CHANNEL,
+                    message=final_post_text,
+                    parse_mode='html',
+                    buttons=[[Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot")]]
+                )
             print(f"✅ Психологічний пост '{category_name}' успешно опубліковано!")
         except Exception as e:
             print(f"❌ Помилка надсилання в Telegram (можливо AuthKeyDuplicatedError): {e}")

@@ -16,7 +16,7 @@ import requests
 import gspread
 from google.oauth2.service_account import Credentials
 import google.auth.transport.requests
-from aiogram.types import FSInputFile
+from aiogram.types import FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 
 MONTHS_UA = {
     1:"січня", 2:"лютого", 3:"березня", 4:"квітня", 5:"травня", 6:"червня",
@@ -230,6 +230,14 @@ async def post_morning_report():
         # 3. Build post text
         post_text = build_morning_post(crypto, forex, market, news)
         post_text = apply_referral_links(post_text)
+        
+        # Додаємо сигнатуру трейдингу
+        post_text += "\n\n📊 <b>НЕ ВСТИГАЄТЕ ЗАПИСУВАТИ ДУМКИ ПІД ЧАС ТОРГІВЛІ?</b>"
+        
+        # Створюємо клавіатуру з кнопкою завантаження віджета
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="завантажити🎙️VOICE WIDGE", url="https://t.me/te_shoo_treba/194")]
+        ])
 
         # 4. Publish to Telegram
         print("🚀 Публікую пост у канал...")
@@ -244,7 +252,8 @@ async def post_morning_report():
                         chat_id=config.TARGET_CHANNEL,
                         photo=FSInputFile(local_img),
                         caption=post_text,
-                        parse_mode='HTML'
+                        parse_mode='HTML',
+                        reply_markup=reply_markup
                     )
                     message_id = msg.message_id
                 else:
@@ -256,7 +265,8 @@ async def post_morning_report():
                         chat_id=config.TARGET_CHANNEL,
                         text=post_text,
                         parse_mode='HTML',
-                        reply_to_message_id=msg_photo.message_id
+                        reply_to_message_id=msg_photo.message_id,
+                        reply_markup=reply_markup
                     )
                     message_id = msg.message_id
                 print("✅ Успішно надіслано!")
@@ -269,7 +279,8 @@ async def post_morning_report():
             msg = await bot.send_message(
                 chat_id=config.TARGET_CHANNEL,
                 text=post_text,
-                parse_mode='HTML'
+                parse_mode='HTML',
+                reply_markup=reply_markup
             )
             message_id = msg.message_id
             print("✅ Надіслано як звичайний текст.")

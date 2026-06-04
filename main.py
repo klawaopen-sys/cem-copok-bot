@@ -360,7 +360,7 @@ async def handle_psychologist_chat(message: Message, state: FSMContext):
     if len(history) > 12:
         history = history[-12:]
         
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     
     payload = {
@@ -464,7 +464,7 @@ async def handle_psychologist_voice(message: Message, state: FSMContext):
     if len(history) > 12:
         history = history[-12:]
         
-    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
     gemini_headers = {"Content-Type": "application/json"}
     
     payload = {
