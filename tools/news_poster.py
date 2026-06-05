@@ -575,14 +575,11 @@ def contains_russian_text(image_path):
     return False
 
 async def generate_ai_image(post_text, channel_type, save_path, image_url=None):
-    """
-    Generates a stunning unique visual using a quadruple fallback chain:
-    Step 1: Pollinations AI
-    Step 2: ModelsLab API (Flux/SDXL)
-    Step 3: Hugging Face InferenceClient (FLUX.1-schnell)
-    Step 4: Fallback to RSS original image download
-    Applies the brand frame at the end.
-    """
+    # Ensure target directory exists
+    dir_name = os.path.dirname(save_path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
+
     clean_text = re.sub(r'<[^>]+>', '', post_text)
     
     api_key = config.GEMINI_API_KEY
@@ -598,12 +595,13 @@ async def generate_ai_image(post_text, channel_type, save_path, image_url=None):
     
     if api_key:
         prompt_for_gemini = (
-            f"Based on this Ukrainian article, generate a highly descriptive visual prompt for an AI image generator (Stable Diffusion/Flux) in English.\n\n"
+            f"Based on this Ukrainian article, generate a concise, highly descriptive visual prompt for an AI image generator (Stable Diffusion/Flux) in English.\n\n"
             f"Article content:\n{clean_text[:1000]}\n\n"
             f"Instructions:\n"
             f"1. Generate a descriptive visual scene representing the main idea of this article.\n"
             f"2. CRITICAL: The image must be purely visual. It must have NO text, NO words, NO letters, NO labels, NO typography.\n"
-            f"3. Output ONLY the English prompt string. DO NOT wrap in quotes, DO NOT write any markdown, introduction, or explanations. Just the prompt text itself."
+            f"3. CRITICAL: Keep it short and concise — maximum 250 characters (approx. 35 words).\n"
+            f"4. Output ONLY the English prompt string. DO NOT wrap in quotes, DO NOT write any markdown, introduction, or explanations. Just the prompt text itself."
         )
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
