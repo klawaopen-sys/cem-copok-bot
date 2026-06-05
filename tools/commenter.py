@@ -270,8 +270,21 @@ async def register_commenter(client):
                     photo_path = await client.download_media(event.message, file=".tmp/temp_trade_promo.jpg")
                     apply_watermark(photo_path)
                 
-                await client.send_message(entity=config.TARGET_CHANNEL, message=post_text, file=photo_path, parse_mode='html')
-                print("✅ Промо-акцію Binance успішно опубліковано!")
+                from aiogram import Bot
+                from aiogram.types import FSInputFile
+                bot = Bot(token=config.BOT_TOKEN)
+                try:
+                    if photo_path and os.path.exists(photo_path):
+                        if len(post_text) <= 1024:
+                            await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path), caption=post_text, parse_mode='HTML')
+                        else:
+                            msg_photo = await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path))
+                            await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML', reply_to_message_id=msg_photo.message_id)
+                    else:
+                        await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML')
+                    print("✅ Промо-акцію Binance успішно опубліковано через Bot API!")
+                finally:
+                    await bot.session.close()
                 if photo_path and os.path.exists(photo_path): os.remove(photo_path)
             except Exception as e:
                 print(f"❌ Помилка донора трейдингу: {e}")

@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 import requests
 import re
 
-def fetch_rss_news(rss_urls):
+def fetch_rss_news(rss_urls, limit=5):
     news_items = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     
@@ -24,7 +24,7 @@ def fetch_rss_news(rss_urls):
                 
             items = root.findall('.//item')
             print(f"✅ Знайдено {len(items)} новин у стрічці {url}")
-            for item in items[:15]:
+            for item in items[:limit]:
                 title_el = item.find('title')
                 link_el = item.find('link')
                 desc_el = item.find('description')

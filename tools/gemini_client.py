@@ -9,7 +9,7 @@ def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries=4, in
     Handles read timeout, connection errors, and HTTP status codes: 429 (rate limits) and 503 (service unavailable).
     Also tries fallback models if the primary model fails.
     """
-    models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+    models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-flash-latest"]
     
     # Extract API key
     key_match = re.search(r'key=([^&]+)', url)
