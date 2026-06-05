@@ -9,3 +9,4 @@ requests==2.31.0
 pytz
 telethon
 Pillow
+huggingface_hub

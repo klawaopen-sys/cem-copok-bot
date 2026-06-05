@@ -16,6 +16,7 @@ from aiogram.fsm.context import FSMContext
 from tools.poster import run_poster
 from tools.news_poster import run_news_poster, run_ai_news_poster, run_psy_news_poster, run_weekly_digest, fill_daily_queue, run_image_control_check
 from tools.commenter import register_commenter
+from tools.gemini_client import gemini_post_with_retry
 import config
 
 # Ініціалізація юзербота Telethon (Клава)
@@ -371,7 +372,7 @@ async def handle_psychologist_chat(message: Message, state: FSMContext):
     }
     
     try:
-        r = requests.post(url, headers=headers, json=payload, timeout=30)
+        r = gemini_post_with_retry(url, headers, payload, timeout=30)
         if r.status_code == 200:
             ai_reply = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
             history.append({
@@ -475,7 +476,7 @@ async def handle_psychologist_voice(message: Message, state: FSMContext):
     }
     
     try:
-        r = requests.post(gemini_url, headers=gemini_headers, json=payload, timeout=30)
+        r = gemini_post_with_retry(gemini_url, gemini_headers, payload, timeout=30)
         if r.status_code == 200:
             ai_reply = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
             history.append({
@@ -659,6 +660,7 @@ async def main():
         
         # 3. Налаштовуємо розклад публікацій
         # Трейдинг
+        schedule.every().day.at(config.MORNING_POST_TIME, "Europe/Kyiv").do(morning_job)
         schedule.every().day.at("12:00", "Europe/Kyiv").do(noon_job)
         schedule.every().day.at("14:15", "Europe/Kyiv").do(noon_job)
         schedule.every().day.at("14:20", "Europe/Kyiv").do(psy_job_slot_1)

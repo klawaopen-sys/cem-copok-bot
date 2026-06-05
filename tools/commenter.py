@@ -39,7 +39,8 @@ def get_gemini_comment(post_text):
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
-        r = requests.post(url, headers=headers, json=payload, timeout=15)
+        from tools.gemini_client import gemini_post_with_retry
+        r = gemini_post_with_retry(url, headers, payload, timeout=15)
         if r.status_code == 200:
             comment = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
             if comment.startswith('"') and comment.endswith('"'):
@@ -73,7 +74,8 @@ def get_gemini_psychology_rewrite(post_text):
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
-        r = requests.post(url, headers=headers, json=payload, timeout=30)
+        from tools.gemini_client import gemini_post_with_retry
+        r = gemini_post_with_retry(url, headers, payload, timeout=30)
         if r.status_code == 200:
             rewrite = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
             if rewrite.startswith('"') and rewrite.endswith('"'):

@@ -126,6 +126,7 @@ AI_DONOR_CHANNELS = [
     'hiaimedia',
     'ai_newz',
     'DeepTechNET',
+    'misha_davai_po_novoi',
     'neuro_channel',
     -1002546853359  # ID приватного каналу 'Никита Велс | AI'
 ]

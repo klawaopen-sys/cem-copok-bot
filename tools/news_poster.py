@@ -15,6 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 import re
 import base64
 from tools.news_reporter import fetch_rss_news
+from tools.gemini_client import gemini_post_with_retry
 
 
 # ---------------------------------------------------------------------
@@ -79,7 +80,7 @@ def select_and_rewrite_news_with_gemini(news_items):
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
-        r = requests.post(url, headers=headers, json=payload, timeout=45)
+        r = gemini_post_with_retry(url, headers, payload, timeout=45)
         if r.status_code == 200:
             response_text = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
             
@@ -197,7 +198,7 @@ def select_and_compile_with_gemini(news_list, my_last_posts, category_name, chan
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
-        r = requests.post(url, headers=headers, json=payload, timeout=45)
+        r = gemini_post_with_retry(url, headers, payload, timeout=45)
         if r.status_code == 200:
             res_json = r.json()
             response_text = res_json['candidates'][0]['content']['parts'][0]['text'].strip()
@@ -326,7 +327,7 @@ def select_and_rewrite_ai_with_gemini(news_list, category_name):
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
-        r = requests.post(url, headers=headers, json=payload, timeout=45)
+        r = gemini_post_with_retry(url, headers, payload, timeout=45)
         if r.status_code == 200:
             response_text = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
             lines = response_text.split('\n')
@@ -561,7 +562,7 @@ def contains_russian_text(image_path):
         }
         
         print(f"👁️ Sending image to Gemini for Russian text detection (OCR)...")
-        r = requests.post(url, headers=headers, json=payload, timeout=25)
+        r = gemini_post_with_retry(url, headers, payload, timeout=25)
         if r.status_code == 200:
             result = r.json()['candidates'][0]['content']['parts'][0]['text'].strip().upper()
             print(f"🔍 Gemini OCR result: {result}")
@@ -608,7 +609,7 @@ async def generate_ai_image(post_text, channel_type, save_path, image_url=None):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
             headers = {"Content-Type": "application/json"}
             payload = {"contents": [{"parts": [{"text": prompt_for_gemini}]}]}
-            r = requests.post(url, headers=headers, json=payload, timeout=25)
+            r = gemini_post_with_retry(url, headers, payload, timeout=25)
             if r.status_code == 200:
                 gemini_prompt = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
                 gemini_prompt = re.sub(r'^["\'`]+|["\'`]+$', '', gemini_prompt)
@@ -632,7 +633,7 @@ async def generate_ai_image(post_text, channel_type, save_path, image_url=None):
     try:
         print("🚀 [Step 1] Generating via Pollinations AI...")
         encoded_prompt = urllib.parse.quote(final_prompt)
-        gen_url = f"https://image.pollinations.ai/p/{encoded_prompt}?width=1024&height=1024&nologo=true"
+        gen_url = f"https://image.pollinations.ai/p/{encoded_prompt}?width=768&height=432&nologo=true"
         r = requests.get(gen_url, timeout=25)
         if r.status_code == 200 and len(r.content) > 5000:
             with open(save_path, "wb") as f:
@@ -646,41 +647,8 @@ async def generate_ai_image(post_text, channel_type, save_path, image_url=None):
         print(f"⚠️ Pollinations failed with error: {e}")
 
     # --- ШАГ 2: ModelsLab API ---
-    MODELSLAB_API_KEY = "VZn19KJyq1BlaUWKJGiQ9UQjH9DTrO1vKPurkK8ppRFbhMLvkGfBlWKbqxGR"
-    try:
-        print("🚀 [Step 2] Generating via ModelsLab...")
-        url = "https://modelslab.com/api/v7/images/text-to-image"
-        payload = {
-            "key": MODELSLAB_API_KEY,
-            "prompt": final_prompt,
-            "negative_prompt": "blurry, low quality, distorted, ugly, text, words, logo",
-            "width": "1024",
-            "height": "1024",
-            "samples": "1",
-            "num_inference_steps": "20",
-            "guidance_scale": 7.5,
-            "seed": None,
-            "model_id": "sdxl"
-        }
-        headers = {'Content-Type': 'application/json'}
-        r = requests.post(url, json=payload, headers=headers, timeout=25)
-        if r.status_code == 200:
-            res_data = r.json()
-            if res_data.get("status") == "success" and res_data.get("output"):
-                img_url = res_data["output"][0]
-                img_r = requests.get(img_url, timeout=25)
-                if img_r.status_code == 200:
-                    with open(save_path, "wb") as f:
-                        f.write(img_r.content)
-                    print("💾 Image successfully generated via ModelsLab!")
-                    apply_brand_frame(save_path, channel_type)
-                    return True
-            else:
-                print(f"⚠️ ModelsLab status: {res_data.get('status')}, error: {res_data.get('message')}")
-        else:
-            print(f"⚠️ ModelsLab failed (Status: {r.status_code})")
-    except Exception as e:
-        print(f"⚠️ ModelsLab failed with error: {e}")
+    # Disabled by user request (ModelsLab is paid)
+    print("⏭️ [Step 2] ModelsLab is disabled (paid service). Skipping to Step 3.")
 
     # --- ШАГ 3: Hugging Face Inference API (InferenceClient) ---
     HUGGINGFACE_API_KEY = "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"
@@ -688,7 +656,7 @@ async def generate_ai_image(post_text, channel_type, save_path, image_url=None):
         print("🚀 [Step 3] Generating via Hugging Face InferenceClient...")
         from huggingface_hub import InferenceClient
         hf_client = InferenceClient(api_key=HUGGINGFACE_API_KEY)
-        image = hf_client.text_to_image(prompt=final_prompt, model="black-forest-labs/FLUX.1-schnell")
+        image = hf_client.text_to_image(prompt=final_prompt, model="black-forest-labs/FLUX.1-schnell", width=768, height=432)
         image.save(save_path)
         print("💾 Image successfully generated via Hugging Face InferenceClient!")
         apply_brand_frame(save_path, channel_type)
@@ -1310,7 +1278,7 @@ async def post_weekly_digest(client):
             headers = {"Content-Type": "application/json"}
             payload = {"contents": [{"parts": [{"text": prompt}]}]}
             
-            r = requests.post(url, headers=headers, json=payload, timeout=60)
+            r = gemini_post_with_retry(url, headers, payload, timeout=60)
             if r.status_code == 200:
                 digest_text = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
                 if digest_text.startswith('"') and digest_text.endswith('"'):
@@ -1469,7 +1437,7 @@ def select_and_rewrite_psy_with_gemini(news_list, category_name):
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
-        r = requests.post(url, headers=headers, json=payload, timeout=45)
+        r = gemini_post_with_retry(url, headers, payload, timeout=45)
         if r.status_code == 200:
             response_text = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
             lines = response_text.split('\n')

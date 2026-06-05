@@ -142,7 +142,8 @@ def get_gemini_trader_advice(crypto, forex, market):
             }]
         }
         
-        r = requests.post(url, headers=headers, json=payload, timeout=15)
+        from tools.gemini_client import gemini_post_with_retry
+        r = gemini_post_with_retry(url, headers, payload, timeout=15)
         if r.status_code == 200:
             data = r.json()
             advice = data['candidates'][0]['content']['parts'][0]['text'].strip()
