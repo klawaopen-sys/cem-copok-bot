@@ -230,10 +230,6 @@ async def post_morning_report():
         # 3. Build post text
         post_text = build_morning_post(crypto, forex, market, news)
         post_text = apply_referral_links(post_text)
-        
-        # Додаємо сигнатуру трейдингу
-        signature = "\n\n📊 <b>НЕ ВСТИГАЄТЕ ЗАПИСУВАТИ ДУМКИ ПІД ЧАС ТОРГІВЛІ?</b>"
-        post_text += signature
 
         # Якщо пост досі перевищує 1024 символи, спробуємо його трохи скоротити, щоб він помістився в один пост з фото
         if len(post_text) > 1024:
@@ -256,10 +252,8 @@ async def post_morning_report():
             if len(post_text) > 1024:
                 post_text = post_text[:1021] + "..."
         
-        # Створюємо клавіатуру з кнопкою завантаження віджета
-        reply_markup = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="завантажити🎙️VOICE WIDGE", url="https://t.me/te_shoo_treba/194")]
-        ])
+        # Вимкнено посилання на мікрофончик/віджет
+        reply_markup = None
 
         # 4. Publish to Telegram
         print("🚀 Публікую пост у канал...")
