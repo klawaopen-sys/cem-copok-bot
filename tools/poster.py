@@ -48,7 +48,7 @@ def build_morning_post(crypto, forex, market, news_text):
         p = crypto[sym]['price']
         ch = crypto[sym]['change']
         em = "🟢" if ch > 0 else "🔴"
-        return f"{label}: ${p:,.2f} ({em} {ch:+.2f}%)"
+        return f"{label}: ${p:,.2f} {em} {ch:+.2f}%"
 
     advice = get_gemini_trader_advice(crypto, forex, market)
 
@@ -57,11 +57,11 @@ def build_morning_post(crypto, forex, market, news_text):
         f"{mood}\n\n"
         f"📰 <b>Головні новини:</b>\n{news_text}\n\n"
         f"💰 <b>Криптовалюти:</b>\n"
-        f"{line('BTC','BTC/USD')}\n"
-        f"{line('ETH','ETH/USD')}\n"
-        f"{line('SOL','SOL/USD')}\n"
-        f"{line('BNB','BNB/USD')}\n"
-        f"{line('XRP','XRP/USD')}\n\n"
+        f"{line('BTC','BTC')}\n"
+        f"{line('ETH','ETH')}\n"
+        f"{line('SOL','SOL')}\n"
+        f"{line('BNB','BNB')}\n"
+        f"{line('XRP','XRP')}\n\n"
         f"💵 <b>Форекс:</b>\n"
         f"USD/UAH: ₴{forex.get('USD/UAH') or '—'}\n"
         f"EUR/UAH: ₴{forex.get('EUR/UAH') or '—'}\n"
@@ -232,7 +232,29 @@ async def post_morning_report():
         post_text = apply_referral_links(post_text)
         
         # Додаємо сигнатуру трейдингу
-        post_text += "\n\n📊 <b>НЕ ВСТИГАЄТЕ ЗАПИСУВАТИ ДУМКИ ПІД ЧАС ТОРГІВЛІ?</b>"
+        signature = "\n\n📊 <b>НЕ ВСТИГАЄТЕ ЗАПИСУВАТИ ДУМКИ ПІД ЧАС ТОРГІВЛІ?</b>"
+        post_text += signature
+
+        # Якщо пост досі перевищує 1024 символи, спробуємо його трохи скоротити, щоб він помістився в один пост з фото
+        if len(post_text) > 1024:
+            print(f"⚠️ Довжина поста {len(post_text)} перевищує ліміт Telegram (1024). Скорочуємо...")
+            parts = post_text.split("💡 <b>Порада трейдеру:</b>\n")
+            if len(parts) == 2:
+                sub_parts = parts[1].split("\n\n#Крипта")
+                if len(sub_parts) >= 2:
+                    advice_text = sub_parts[0]
+                    tags_and_signature = "\n\n#Крипта" + "\n\n#Крипта".join(sub_parts[1:])
+                    # Обрізаємо пораду так, щоб загальна довжина стала <= 1020
+                    current_len_without_advice = len(parts[0]) + len("💡 <b>Порада трейдеру:</b>\n") + len(tags_and_signature)
+                    max_advice_len = 1020 - current_len_without_advice
+                    if max_advice_len > 10:
+                        advice_text = advice_text[:max_advice_len - 3] + "..."
+                        parts[1] = advice_text + tags_and_signature
+                        post_text = "💡 <b>Порада трейдеру:</b>\n".join(parts)
+            
+            # Якщо все ще більше 1024, жорстко обрізаємо до 1021 символу з трьома крапками
+            if len(post_text) > 1024:
+                post_text = post_text[:1021] + "..."
         
         # Створюємо клавіатуру з кнопкою завантаження віджета
         reply_markup = InlineKeyboardMarkup(inline_keyboard=[

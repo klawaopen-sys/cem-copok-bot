@@ -662,8 +662,6 @@ async def main():
         # Трейдинг
         schedule.every().day.at(config.MORNING_POST_TIME, "Europe/Kyiv").do(morning_job)
         schedule.every().day.at("12:00", "Europe/Kyiv").do(noon_job)
-        schedule.every().day.at("14:15", "Europe/Kyiv").do(noon_job)
-        schedule.every().day.at("14:20", "Europe/Kyiv").do(psy_job_slot_1)
         # Штучний Інтелект (AI)
         schedule.every().day.at(config.AI_SLOT_1_TIME, "Europe/Kyiv").do(ai_job_slot_1)
         schedule.every().day.at(config.AI_SLOT_2_TIME, "Europe/Kyiv").do(ai_job_slot_2)
