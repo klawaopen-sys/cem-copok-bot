@@ -503,7 +503,7 @@ def morning_job():
     except Exception as e: print(f"Помилка ранкового поста: {e}")
 
 def noon_job():
-    print("⏰ Час 12:00! Запускаю денний огляд новин трейдингу...")
+    print("⏰ Час 14:00! Запускаю денний огляд новин трейдингу...")
     try:
         if main_loop and client: run_news_poster(client, main_loop)
     except Exception as e: print(f"Помилка денного поста трейдингу: {e}")
@@ -661,7 +661,7 @@ async def main():
         # 3. Налаштовуємо розклад публікацій
         # Трейдинг
         schedule.every().day.at(config.MORNING_POST_TIME, "Europe/Kyiv").do(morning_job)
-        schedule.every().day.at("12:00", "Europe/Kyiv").do(noon_job)
+        schedule.every().day.at("14:00", "Europe/Kyiv").do(noon_job)
         # Штучний Інтелект (AI)
         schedule.every().day.at(config.AI_SLOT_1_TIME, "Europe/Kyiv").do(ai_job_slot_1)
         schedule.every().day.at(config.AI_SLOT_2_TIME, "Europe/Kyiv").do(ai_job_slot_2)
@@ -692,7 +692,7 @@ async def main():
         
         print(f"📅 Зареєстровано розклад трейдингу (Київ):")
         print(f"   - Ранковий аналіз: щодня о {config.MORNING_POST_TIME}")
-        print(f"   - Денні новини:    щодня о 12:00")
+        print(f"   - Денні новини:    щодня о 14:00")
         print(f"   - Тижневий дайджест: щонеділі о 14:00")
         print(f"📅 Зареєстровано розклад ШІ (Київ):")
         print(f"   - 1. AI News & Web3 Tech:        щодня о {config.AI_SLOT_1_TIME}")
