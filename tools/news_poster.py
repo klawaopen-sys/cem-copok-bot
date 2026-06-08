@@ -966,7 +966,7 @@ async def post_news_report(client):
     try:
         # 1. Fetch RSS news
         rss_urls = getattr(config, 'TRADING_REPORTER_RSS_URLS', [])
-        news_list = fetch_rss_news(rss_urls)
+        news_list = fetch_rss_news(rss_urls, limit=3)
         if not news_list:
             print("⚠️ Новин трейдингу з RSS не знайдено.")
             return
@@ -1114,7 +1114,7 @@ async def post_ai_category_update(client, category_name):
         rss_urls = getattr(config, 'AI_REPORTER_RSS_URLS', [])
         if not rss_urls:
             rss_urls = getattr(config, 'REPORTER_RSS_URLS', [])
-        news_list = fetch_rss_news(rss_urls)
+        news_list = fetch_rss_news(rss_urls, limit=3)
         if not news_list:
             print("⚠️ ШІ-постів у RSS не знайдено.")
             return
@@ -1544,7 +1544,7 @@ async def post_psy_category_update(client, category_name):
             print(f"⚠️ [QUEUE] Помилка роботи з чергою Google Таблиць: {e}. Переходжу до живого автопостингу...")
 
         rss_urls = getattr(config, 'PSY_REPORTER_RSS_URLS', [])
-        news_list = fetch_rss_news(rss_urls)
+        news_list = fetch_rss_news(rss_urls, limit=3)
         if not news_list:
             print("⚠️ Постів з психології у RSS не знайдено.")
             return
