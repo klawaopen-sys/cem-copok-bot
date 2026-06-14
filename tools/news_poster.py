@@ -17,6 +17,17 @@ import base64
 from tools.news_reporter import fetch_rss_news
 from tools.gemini_client import gemini_post_with_retry
 
+def limit_caption_text(text, max_len=1024):
+    """Ensures caption text is within Telegram limit and doesn't contain broken HTML"""
+    if len(text) <= max_len:
+        return text, 'HTML'
+    # Try removing HTML tags to save space and avoid unclosed tag errors
+    clean_text = re.sub(r'<[^>]+>', '', text)
+    if len(clean_text) <= max_len:
+        return clean_text, None
+    # Truncate plain text
+    return clean_text[:max_len - 3] + "...", None
+
 
 # ---------------------------------------------------------------------
 # А. Налаштування для Трейдингу (12:00)
@@ -1005,11 +1016,14 @@ async def post_news_report(client):
         # Публікація
         try:
             if photo_path and os.path.exists(photo_path):
-                if len(post_text) <= 1024:
-                    await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path), caption=post_text, parse_mode='HTML', reply_markup=reply_markup)
-                else:
-                    msg_photo = await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path))
-                    await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML', reply_to_message_id=msg_photo.message_id, reply_markup=reply_markup)
+                caption_text, parse_mode = limit_caption_text(post_text, 1024)
+                await bot.send_photo(
+                    chat_id=config.TARGET_CHANNEL,
+                    photo=FSInputFile(photo_path),
+                    caption=caption_text,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup
+                )
                 try: os.remove(photo_path)
                 except Exception: pass
             else:
@@ -1220,10 +1234,10 @@ async def post_ai_category_update(client, category_name):
         print(f"❌ Помилка в процесі публікації ШІ-категорії '{category_name}': {e}")
 
 # ---------------------------------------------------------------------
-# Г-2. Тижневий дайджест (Підсумки тижня - неділя 14:00)
+# Г-2. Тижневий дайджест (Підсумки тижня - неділя 18:00)
 # ---------------------------------------------------------------------
 async def post_weekly_digest(client):
-    """Публікує тижневий дайджест Трейдингу (неділя 14:00)"""
+    """Публікує тижневий дайджест Трейдингу (неділя 18:00)"""
     print("🚀 Початок процесу щотижневого дайджесту...")
     bot = Bot(token=config.BOT_TOKEN)
     try:
@@ -1265,7 +1279,7 @@ async def post_weekly_digest(client):
             "1. На основі цих новин обери 3-4 найважливіші події або тренди в криптосвіті за минулий тиждень.\n"
             "2. Структуруй кожну подію: напиши красивий заголовок з емодзі, короткий аналіз події та чому це важливо для ринку.\n"
             "3. Пост має бути написаний красивою, соковитою українською мовою в іронічному та професійному стилі нашого бренду 'Сім сорок'.\n"
-            "4. Загальна довжина тексту має бути близько 800-950 символів, щоб легко читалося, але при цьому було змістовно.\n"
+            "4. Загальна довжина тексту має бути СУВОРО до 750-800 символів (разом із пробілами), оскільки цей текст буде використовуватися як підпис до фотографії, ліміт якої в Telegram становить 1024 символи. Це критично важливе обмеження.\n"
             "5. Використовуй ТІЛЬКИ HTML-теги для форматування: <b>жирний текст</b>. Не використовуй маркдаун зі зірочками.\n"
             "6. В кінці додай висновок або корисну пораду на наступний тиждень та підпис бренду.\n\n"
             "Пиши виключно українською мовою з використанням HTML-форматування."
@@ -1338,11 +1352,14 @@ async def post_weekly_digest(client):
                 
         # Публікація в канал
         if photo_path and os.path.exists(photo_path):
-            if len(digest_text) <= 1024:
-                await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path), caption=digest_text, parse_mode='HTML', reply_markup=reply_markup)
-            else:
-                msg_photo = await bot.send_photo(chat_id=config.TARGET_CHANNEL, photo=FSInputFile(photo_path))
-                await bot.send_message(chat_id=config.TARGET_CHANNEL, text=digest_text, parse_mode='HTML', reply_to_message_id=msg_photo.message_id, reply_markup=reply_markup)
+            caption_text, parse_mode = limit_caption_text(digest_text, 1024)
+            await bot.send_photo(
+                chat_id=config.TARGET_CHANNEL,
+                photo=FSInputFile(photo_path),
+                caption=caption_text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup
+            )
             try: os.remove(photo_path)
             except Exception: pass
         else:

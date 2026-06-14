@@ -551,7 +551,7 @@ def psy_job_slot_3():
     except Exception as e: print(f"Помилка в PSY SLOT 3: {e}")
 
 def weekly_digest_job():
-    print("⏰ Час 14:00 (Неділя)! Запускаю тижневий дайджест...")
+    print("⏰ Час 18:00 (Неділя)! Запускаю тижневий дайджест...")
     try:
         if main_loop and client: run_weekly_digest(client, main_loop)
     except Exception as e: print(f"Помилка тижневого дайджесту: {e}")
@@ -671,8 +671,8 @@ async def main():
         schedule.every().day.at(config.PSY_SLOT_1_TIME, "Europe/Kyiv").do(psy_job_slot_1)
         schedule.every().day.at(config.PSY_SLOT_2_TIME, "Europe/Kyiv").do(psy_job_slot_2)
         schedule.every().day.at(config.PSY_SLOT_3_TIME, "Europe/Kyiv").do(psy_job_slot_3)
-        # Тижневий дайджест трейдингу (неділя о 14:00)
-        schedule.every().sunday.at("14:00", "Europe/Kyiv").do(weekly_digest_job)
+        # Тижневий дайджест трейдингу (неділя о 18:00)
+        schedule.every().sunday.at("18:00", "Europe/Kyiv").do(weekly_digest_job)
         # Нічна підготовка контенту (авточерга в Google Sheets)
         # Нічна підготовка контенту (роздільні завдання)
         schedule.every().day.at("03:00", "Europe/Kyiv").do(daily_queue_job_ai)
@@ -693,7 +693,7 @@ async def main():
         print(f"📅 Зареєстровано розклад трейдингу (Київ):")
         print(f"   - Ранковий аналіз: щодня о {config.MORNING_POST_TIME}")
         print(f"   - Денні новини:    щодня о 14:00")
-        print(f"   - Тижневий дайджест: щонеділі о 14:00")
+        print(f"   - Тижневий дайджест: щонеділі о 18:00")
         print(f"📅 Зареєстровано розклад ШІ (Київ):")
         print(f"   - 1. AI News & Web3 Tech:        щодня о {config.AI_SLOT_1_TIME}")
         print(f"   - 2. AI Productivity & Work:     щодня о {config.AI_SLOT_2_TIME}")

@@ -14,6 +14,86 @@ from PIL import Image
 TARGET_CHANNELS = getattr(config, 'COMMENT_CHANNELS', [])
 TRADING_DONOR_CHANNELS = getattr(config, 'TRADING_DONOR_CHANNELS', [])
 PSY_DONOR_CHANNELS = getattr(config, 'PSY_DONOR_CHANNELS', [])
+REAL_ESTATE_CHANNELS = getattr(config, 'REAL_ESTATE_CHANNELS', [])
+MANICURE_CHANNELS = getattr(config, 'MANICURE_CHANNELS', [])
+
+def get_gemini_real_estate_comment(post_text):
+    """Генерує розумний коментар до поста про нерухомість через Gemini"""
+    if not config.GEMINI_API_KEY:
+        return "Цікавий об'єкт, варто придивитися! 👀"
+    try:
+        post_text = post_text[:2000] if post_text else ""
+        prompt = (
+            "Ти — досвідчений і доброзичливий ріелтор, спеціаліст з нерухомості та інвестор.\n"
+            "Напиши короткий, змістовний і природний коментар (1-2 речення) до наступного поста про нерухомість.\n\n"
+            "ВАЖЛИВО:\n"
+            "1. Якщо вихідний пост написаний АНГЛІЙСЬКОЮ мовою, НЕ пиши коментар взагалі. Натомість поверни ТІЛЬКИ одне слово: SKIP.\n"
+            "2. Якщо пост написаний іншою мовою (українська, російська тощо) — напиши коментар ТІЄЮ Ж МОВОЮ, якою написаний сам пост. Коментар має виглядати так, ніби його написала жива людина в Telegram-чаті (простий, розмовний і вільний стиль без зайвої офіційності).\n\n"
+            "КРИТИЧНО ВАЖЛИВЕ ПРАВИЛО (якщо не повернуто SKIP):\n"
+            "Обов'язково закінчуй свій коментар коротким, природним та залучаючим питанням до учасників чату ТІЄЮ Ж МОВОЮ про нерухомість, ціни, ремонт чи оренду, щоб спровокувати обговорення "
+            "(наприклад, якщо пишеш українською: 'Як думаєте, ціна адекватна для цього району чи завищена?', якщо російською: 'Как думаете, цена адекватная для этого района или завышена?').\n\n"
+            "Суворі обмеження:\n"
+            "- НЕ використовуй хештеги, привітання або будь-які формальності.\n"
+            "- Не пиши ніякої реклами, посилань чи закликів підписуватись.\n"
+            "- Текст коментаря має бути коротким, живим та ємним.\n\n"
+            f"Текст поста:\n{post_text}"
+        )
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
+        headers = {"Content-Type": "application/json"}
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        from tools.gemini_client import gemini_post_with_retry
+        r = gemini_post_with_retry(url, headers, payload, timeout=15)
+        if r.status_code == 200:
+            comment = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            if comment.startswith('"') and comment.endswith('"'):
+                comment = comment[1:-1]
+            if comment.startswith('«') and comment.endswith('»'):
+                comment = comment[1:-1]
+            return comment
+        else:
+            print(f"Помилка Gemini API в коментарях про нерухомість: {r.status_code}")
+    except Exception as e:
+        print(f"Помилка генерації коментаря про нерухомість: {e}")
+    return "Цікавий варіант, треба обдумати! 👀"
+
+def get_gemini_manicure_comment(post_text):
+    """Генерує розумний коментар до б'юті-посту про манікюр через Gemini"""
+    if not config.GEMINI_API_KEY:
+        return "Дуже гарний манікюр! 😍"
+    try:
+        post_text = post_text[:2000] if post_text else ""
+        prompt = (
+            "Ти — досвідчений nail-майстер (майстер манікюру) або б'юті-ентузіаст, який обожнює стильний та доглянутий манікюр.\n"
+            "Напиши короткий, дружній і захоплений коментар (1-2 речення) до наступного поста про манікюр, дизайн чи догляд за руками.\n\n"
+            "ВАЖЛИВО:\n"
+            "1. Якщо вихідний пост написаний АНГЛІЙСЬКОЮ мовою, НЕ пиши коментар взагалі. Натомість поверни ТІЛЬКИ одне слово: SKIP.\n"
+            "2. Якщо пост написаний іншою мовою (українська, російська тощо) — напиши коментар ТІЄЮ Ж МОВОЮ, якою написаний сам пост. Коментар має виглядати так, ніби його написала жива людина в Telegram-чаті (простий, розмовний і вільний стиль без зайвої офіційності, з використанням емодзі).\n\n"
+            "КРИТИЧНО ВАЖЛИВЕ ПРАВИЛО (якщо не повернуто SKIP):\n"
+            "Обов'язково закінчуй свій коментар коротким, природним та залучаючим питанням про дизайн, вибір кольору чи техніку ТІЄЮ Ж МОВОЮ, щоб спровокувати обговорення "
+            "(наприклад, якщо пишеш українською: 'Як вам такий відтінок, ризикнули б зробити собі?', якщо російською: 'Как вам такой оттенок, рискнули бы сделать себе?').\n\n"
+            "Суворі обмеження:\n"
+            "- НЕ використовуй хештеги, привітання або будь-які формальності.\n"
+            "- Не пиши ніякої реклами, посилань чи закликів підписуватись.\n"
+            "- Текст коментаря має бути коротким, живим та ніжним.\n\n"
+            f"Текст поста:\n{post_text}"
+        )
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
+        headers = {"Content-Type": "application/json"}
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        from tools.gemini_client import gemini_post_with_retry
+        r = gemini_post_with_retry(url, headers, payload, timeout=15)
+        if r.status_code == 200:
+            comment = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            if comment.startswith('"') and comment.endswith('"'):
+                comment = comment[1:-1]
+            if comment.startswith('«') and comment.endswith('»'):
+                comment = comment[1:-1]
+            return comment
+        else:
+            print(f"Помилка Gemini API в коментарях про манікюр: {r.status_code}")
+    except Exception as e:
+        print(f"Помилка генерації коментаря про манікюр: {e}")
+    return "Виглядає просто чудово! 😍"
 
 def get_gemini_comment(post_text):
     """Генерує розумний коментар до трейдинг-посту через Gemini"""
@@ -187,6 +267,20 @@ async def register_commenter(client):
                 str(channel_id) in comment_usernames
             )
             
+            # Визначаємо, чи це канал для коментування нерухомості
+            re_usernames = [c.lower().strip() for c in REAL_ESTATE_CHANNELS]
+            is_re_channel = (
+                channel_username.lower() in re_usernames or 
+                str(channel_id) in re_usernames
+            )
+            
+            # Визначаємо, чи це канал для коментування манікюру
+            manicure_usernames = [c.lower().strip() for c in MANICURE_CHANNELS]
+            is_manicure_channel = (
+                channel_username.lower() in manicure_usernames or 
+                str(channel_id) in manicure_usernames
+            )
+            
             # --- 1. АВТОМАТИЧНИЙ ЛАЙК ДЛЯ ВСІХ ПІДПИСАНИХ КАНАЛІВ (Включаючи ті, де Клава адмін або просто підписана) ---
             print(f"👍 [{channel_title} (@{channel_username})] Новий пост! Ставлю автолайк...")
             await asyncio.sleep(random.uniform(2.0, 7.0))
@@ -206,15 +300,21 @@ async def register_commenter(client):
                     )
                     print("✅ Посилання успішно замінено на бота-бібліотекаря!")
                     
-            # --- 3. ЧУЖІ КАНАЛИ ТРЕЙДИНГУ: Розумне автокоментування через Gemini ---
-            elif is_comment_channel:
+            # --- 3. ЧУЖІ КАНАЛИ ТРЕЙДИНГУ/НЕРУХОМОСТІ/МАНІКЮРУ: Розумне автокоментування через Gemini ---
+            elif is_comment_channel or is_re_channel or is_manicure_channel:
                 post_text = event.raw_text
                 if not post_text or len(post_text.strip()) < 15:
                     return
                     
                 print(f"📝 [{channel_title}] Генерую розумний коментар...")
                 loop = asyncio.get_event_loop()
-                comment = await loop.run_in_executor(None, get_gemini_comment, post_text)
+                
+                if is_re_channel:
+                    comment = await loop.run_in_executor(None, get_gemini_real_estate_comment, post_text)
+                elif is_manicure_channel:
+                    comment = await loop.run_in_executor(None, get_gemini_manicure_comment, post_text)
+                else:
+                    comment = await loop.run_in_executor(None, get_gemini_comment, post_text)
                 
                 if not comment or comment.strip().upper() == "SKIP":
                     return
