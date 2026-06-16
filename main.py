@@ -1,4 +1,4 @@
-import schedule
+﻿import schedule
 import time
 import asyncio
 import threading
@@ -41,6 +41,7 @@ def get_psy_main_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="💬 Розпочати діалог", callback_data="start_psy_chat_from_menu")
     builder.button(text="🧠 Канал Психологія", url="https://t.me/ncux_olo_guY")
+    builder.button(text="🤖 Замовити такого ж бота", url="https://klawaopen-sys.github.io/nova-bots-space/")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -166,7 +167,24 @@ async def cmd_start(message: Message, command: CommandObject):
             "🧠 @ncux_olo_guY (Психологія)\n"
             "🤖 @te_shoo_treba (AI)"
         )
-        await message.answer(welcome_text, parse_mode="HTML")
+        builder = InlineKeyboardBuilder()
+        builder.button(text="🤖 Замовити такого ж бота", url="https://klawaopen-sys.github.io/nova-bots-space/")
+        await message.answer(welcome_text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
+@router.message(Command("order_bot", "promo"))
+async def cmd_order_bot(message: Message):
+    promo_text = (
+        "🤖 <b>Бажаєте замовити розробку власного розумного бота або авто-системи?</b>\n\n"
+        "Ми створюємо готові рішення під ключ будь-якої складності:\n"
+        "• 🧠 Інтеграція штучного інтелекту (Gemini, ChatGPT, Groq)\n"
+        "• 📊 Списування в Google Sheets та бази даних\n"
+        "• 💳 Автоматичні платежі (Visa/Mastercard, Telegram Stars, Криптовалюта)\n"
+        "• 📁 Складні CRM-системи, платформи автозапису та маркетплейси\n\n"
+        "🌐 <b>Наш сайт з інтерактивним демо та каталогом:</b> https://klawaopen-sys.github.io/nova-bots-space/"
+    )
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🌐 Перейти на сайт-вітрину", url="https://klawaopen-sys.github.io/nova-bots-space/")
+    await message.answer(promo_text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 # --- Обробники для окремого бота-психолога (@bbig333_bot) ---
 
@@ -185,6 +203,21 @@ async def cmd_psy_start(message: Message, state: FSMContext):
         reply_markup=get_psy_main_keyboard(), 
         parse_mode="HTML"
     )
+
+@psy_router.message(Command("order_bot", "promo"))
+async def cmd_psy_order_bot(message: Message):
+    promo_text = (
+        "🤖 <b>Бажаєте замовити розробку власного розумного бота або авто-системи?</b>\n\n"
+        "Ми створюємо готові рішення під ключ будь-якої складності:\n"
+        "• 🧠 Інтеграція штучного інтелекту (Gemini, ChatGPT, Groq)\n"
+        "• 📊 Списування в Google Sheets та бази даних\n"
+        "• 💳 Автоматичні платежі (Visa/Mastercard, Telegram Stars, Криптовалюта)\n"
+        "• 📁 Складні CRM-системи, платформи автозапису та маркетплейси\n\n"
+        "🌐 <b>Наш сайт з інтерактивним демо та каталогом:</b> https://klawaopen-sys.github.io/nova-bots-space/"
+    )
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🌐 Перейти на сайт-вітрину", url="https://klawaopen-sys.github.io/nova-bots-space/")
+    await message.answer(promo_text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 @psy_router.callback_query(F.data == "start_psy_chat_from_menu")
 async def handle_start_psy_chat_callback(query: CallbackQuery, state: FSMContext):
@@ -640,10 +673,12 @@ async def main():
         try:
             from aiogram.types import BotCommand
             await bot.set_my_commands([
-                BotCommand(command="start", description="Запустити бібліотеку 📚")
+                BotCommand(command="start", description="Запустити бібліотеку 📚"),
+                BotCommand(command="order_bot", description="Замовити бота 🤖")
             ])
             await psy_bot.set_my_commands([
-                BotCommand(command="start", description="Розпочати діалог 🧠")
+                BotCommand(command="start", description="Розпочати діалог 🧠"),
+                BotCommand(command="order_bot", description="Замовити бота 🤖")
             ])
             print("✅ Команди для ботів успішно налаштовані!")
         except Exception as e:

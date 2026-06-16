@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import asyncio
@@ -1002,7 +1002,10 @@ async def post_news_report(client):
         
         # Створюємо клавіатуру з кнопкою завантаження віджета
         reply_markup = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="завантажити🎙️VOICE WIDGE", url="https://t.me/te_shoo_treba/194")]
+            [
+                InlineKeyboardButton(text="завантажити🎙️VOICE WIDGE", url="https://t.me/te_shoo_treba/194"),
+                InlineKeyboardButton(text="🤖 Замовити такого ж бота", url="https://klawaopen-sys.github.io/nova-bots-space/")
+            ]
         ])
         
         # Генерація картинки через ІІ з накладенням рамки
@@ -1090,7 +1093,10 @@ async def post_ai_category_update(client, category_name):
                             message=final_post_text,
                             file=photo_path,
                             parse_mode='html',
-                            buttons=[[Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194")]]
+                            buttons=[[
+                                Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194"),
+                                Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                            ]]
                         )
                         try: os.remove(photo_path)
                         except Exception: pass
@@ -1099,7 +1105,10 @@ async def post_ai_category_update(client, category_name):
                             entity=config.AI_TARGET_CHANNEL,
                             message=final_post_text,
                             parse_mode='html',
-                            buttons=[[Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194")]]
+                            buttons=[[
+                                Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194"),
+                                Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                            ]]
                         )
                     
                     now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
@@ -1198,7 +1207,10 @@ async def post_ai_category_update(client, category_name):
                     message=final_post_text,
                     file=photo_path,
                     parse_mode='html',
-                    buttons=[[Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194")]]
+                    buttons=[[
+                        Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194"),
+                        Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                    ]]
                 )
                 try: os.remove(photo_path)
                 except Exception: pass
@@ -1207,7 +1219,10 @@ async def post_ai_category_update(client, category_name):
                     entity=config.AI_TARGET_CHANNEL,
                     message=final_post_text,
                     parse_mode='html',
-                    buttons=[[Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194")]]
+                    buttons=[[
+                        Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194"),
+                        Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                    ]]
                 )
                 
             print(f"✅ ШІ-пост '{category_name}' успішно опубліковано!")
@@ -1312,7 +1327,10 @@ async def post_weekly_digest(client):
         
         # Створюємо клавіатуру з кнопкою завантаження віджета
         reply_markup = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="завантажити🎙️VOICE WIDGE", url="https://t.me/te_shoo_treba/194")]
+            [
+                InlineKeyboardButton(text="завантажити🎙️VOICE WIDGE", url="https://t.me/te_shoo_treba/194"),
+                InlineKeyboardButton(text="🤖 Замовити такого ж бота", url="https://klawaopen-sys.github.io/nova-bots-space/")
+            ]
         ])
         
         # Генерація картинки через ІІ з накладенням рамки
@@ -1519,7 +1537,10 @@ async def post_psy_category_update(client, category_name):
                             message=final_post_text,
                             file=photo_path,
                             parse_mode='html',
-                            buttons=[[Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot")]]
+                            buttons=[[
+                                Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot"),
+                                Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                            ]]
                         )
                         try: os.remove(photo_path)
                         except Exception: pass
@@ -1528,7 +1549,10 @@ async def post_psy_category_update(client, category_name):
                             entity=config.PSY_TARGET_CHANNEL,
                             message=final_post_text,
                             parse_mode='html',
-                            buttons=[[Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot")]]
+                            buttons=[[
+                                Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot"),
+                                Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                            ]]
                         )
                     
                     now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
@@ -1607,7 +1631,10 @@ async def post_psy_category_update(client, category_name):
                     message=final_post_text,
                     file=photo_path,
                     parse_mode='html',
-                    buttons=[[Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot")]]
+                    buttons=[[
+                        Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot"),
+                        Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                    ]]
                 )
                 if not is_default:
                     try: os.remove(photo_path)
@@ -1617,7 +1644,10 @@ async def post_psy_category_update(client, category_name):
                     entity=config.PSY_TARGET_CHANNEL,
                     message=final_post_text,
                     parse_mode='html',
-                    buttons=[[Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot")]]
+                    buttons=[[
+                        Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot"),
+                        Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                    ]]
                 )
             print(f"✅ Психологічний пост '{category_name}' успешно опубліковано!")
         except Exception as e:
