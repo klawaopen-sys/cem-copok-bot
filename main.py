@@ -1,4 +1,4 @@
-﻿import schedule
+import schedule
 import time
 import asyncio
 import threading
@@ -583,6 +583,20 @@ def psy_job_slot_3():
         if main_loop and client: run_psy_news_poster(client, main_loop, "Mindfulness & Relationships")
     except Exception as e: print(f"Помилка в PSY SLOT 3: {e}")
 
+def focus_job():
+    print(f"⏰ Час {config.FOCUS_POST_TIME}! Запускаю Фокус дня...")
+    try:
+        from tools.focus_poster import run_focus_poster
+        if main_loop and client: run_focus_poster(client, main_loop)
+    except Exception as e: print(f"Помилка Фокусу дня: {e}")
+
+def daily_upgrade_job():
+    print(f"⏰ Час {config.DAILY_UPGRADE_POST_TIME}! Запускаю щоденну прокачку для трейдерів...")
+    try:
+        from tools.daily_upgrader import run_daily_upgrader
+        run_daily_upgrader()
+    except Exception as e: print(f"Помилка щоденної прокачки: {e}")
+
 def weekly_digest_job():
     print("⏰ Час 18:00 (Неділя)! Запускаю тижневий дайджест...")
     try:
@@ -693,10 +707,11 @@ async def main():
         # asyncio.create_task(psy_dp.start_polling(psy_bot))
         # print("✅ Бот-Психолог успішно запущено!")
         
-        # 3. Налаштовуємо розклад публікацій
         # Трейдинг
         schedule.every().day.at(config.MORNING_POST_TIME, "Europe/Kyiv").do(morning_job)
+        schedule.every().day.at(config.FOCUS_POST_TIME, "Europe/Kyiv").do(focus_job)
         schedule.every().day.at("14:00", "Europe/Kyiv").do(noon_job)
+        schedule.every().day.at(config.DAILY_UPGRADE_POST_TIME, "Europe/Kyiv").do(daily_upgrade_job)
         # Штучний Інтелект (AI)
         schedule.every().day.at(config.AI_SLOT_1_TIME, "Europe/Kyiv").do(ai_job_slot_1)
         schedule.every().day.at(config.AI_SLOT_2_TIME, "Europe/Kyiv").do(ai_job_slot_2)
@@ -727,7 +742,9 @@ async def main():
         
         print(f"📅 Зареєстровано розклад трейдингу (Київ):")
         print(f"   - Ранковий аналіз: щодня о {config.MORNING_POST_TIME}")
+        print(f"   - Фокус дня:       щодня о {config.FOCUS_POST_TIME}")
         print(f"   - Денні новини:    щодня о 14:00")
+        print(f"   - Щоденна прокачка: щодня о {config.DAILY_UPGRADE_POST_TIME}")
         print(f"   - Тижневий дайджест: щонеділі о 18:00")
         print(f"📅 Зареєстровано розклад ШІ (Київ):")
         print(f"   - 1. AI News & Web3 Tech:        щодня о {config.AI_SLOT_1_TIME}")

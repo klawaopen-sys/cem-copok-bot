@@ -149,3 +149,12 @@ REQUIRED_CHANNELS = {
     '@ncux_olo_guY': '🧠 Психологія',
     '@te_shoo_treba': '🤖 Те що треба | AI'
 }
+
+# ---------------------------------------------------------------------
+# 8. Налаштування нових рубрик
+# ---------------------------------------------------------------------
+DAILY_UPGRADE_POST_TIME = '19:00'
+DAILY_UPGRADE_IMAGE = '.tmp/daily_upgrade.jpg'
+FOCUS_POST_TIME = '12:00'
+FOCUS_IMAGE = '.tmp/focus_default.jpg'
+

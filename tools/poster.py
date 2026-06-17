@@ -39,9 +39,6 @@ def build_morning_post(crypto, forex, market, news_text):
     else:
         mood = "🟡 Настрої на ринку: нейтральні"
 
-    btc_price = crypto['BTC']['price'] if crypto and 'BTC' in crypto else None
-    support, resist = get_btc_levels(btc_price)
-
     def line(sym, label):
         if not crypto or sym not in crypto:
             return f"{label}: —"
@@ -49,8 +46,6 @@ def build_morning_post(crypto, forex, market, news_text):
         ch = crypto[sym]['change']
         em = "🟢" if ch > 0 else "🔴"
         return f"{label}: ${p:,.2f} {em} {ch:+.2f}%"
-
-    advice = get_gemini_trader_advice(crypto, forex, market)
 
     post = (
         f"🌅 <b>Ранковий фінансовий огляд</b>\n\n"
@@ -73,11 +68,6 @@ def build_morning_post(crypto, forex, market, news_text):
         f"🪙 <b>Товарні активи:</b>\n"
         f"Золото: {fmt(market.get('GOLD'))}\n"
         f"Нафта Brent: {fmt(market.get('BRENT'))}\n\n"
-        f"🔑 <b>Ключові рівні BTC:</b>\n"
-        f"Підтримка: {support or '—'}\n"
-        f"Опір: {resist or '—'}\n\n"
-        f"💡 <b>Порада трейдеру:</b>\n"
-        f"{advice}\n\n"
         f"#Крипта #Трейдинг #Фінанси"
     )
     return post
@@ -231,26 +221,10 @@ async def post_morning_report():
         post_text = build_morning_post(crypto, forex, market, news)
         post_text = apply_referral_links(post_text)
 
-        # Якщо пост досі перевищує 1024 символи, спробуємо його трохи скоротити, щоб він помістився в один пост з фото
+        # Якщо пост досі перевищує 1024 символи, спробуємо його скоротити
         if len(post_text) > 1024:
-            print(f"⚠️ Довжина поста {len(post_text)} перевищує ліміт Telegram (1024). Скорочуємо...")
-            parts = post_text.split("💡 <b>Порада трейдеру:</b>\n")
-            if len(parts) == 2:
-                sub_parts = parts[1].split("\n\n#Крипта")
-                if len(sub_parts) >= 2:
-                    advice_text = sub_parts[0]
-                    tags_and_signature = "\n\n#Крипта" + "\n\n#Крипта".join(sub_parts[1:])
-                    # Обрізаємо пораду так, щоб загальна довжина стала <= 1020
-                    current_len_without_advice = len(parts[0]) + len("💡 <b>Порада трейдеру:</b>\n") + len(tags_and_signature)
-                    max_advice_len = 1020 - current_len_without_advice
-                    if max_advice_len > 10:
-                        advice_text = advice_text[:max_advice_len - 3] + "..."
-                        parts[1] = advice_text + tags_and_signature
-                        post_text = "💡 <b>Порада трейдеру:</b>\n".join(parts)
-            
-            # Якщо все ще більше 1024, жорстко обрізаємо до 1021 символу з трьома крапками
-            if len(post_text) > 1024:
-                post_text = post_text[:1021] + "..."
+            print(f"⚠️ Довжина поста {len(post_text)} перевищує ліміт Telegram (1024). Обрізаємо...")
+            post_text = post_text[:1021] + "..."
         
         # Вимкнено посилання на мікрофончик/віджет
         reply_markup = None
