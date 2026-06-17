@@ -542,28 +542,22 @@ def noon_job():
     except Exception as e: print(f"Помилка денного поста трейдингу: {e}")
 
 def ai_job_slot_1():
-    print("⏰ Час SLOT 1 (09:00)! Запускаю AI News & Web3 Tech...")
+    print(f"⏰ Час SLOT 1 ({config.AI_SLOT_1_TIME})! Запускаю AI News & Web3 Tech...")
     try:
         if main_loop and client: run_ai_news_poster(client, main_loop, "AI News & Web3 Tech")
     except Exception as e: print(f"Помилка в SLOT 1: {e}")
 
 def ai_job_slot_2():
-    print("⏰ Час SLOT 2 (13:00)! Запускаю AI Productivity & Work...")
+    print(f"⏰ Час SLOT 2 ({config.AI_SLOT_2_TIME})! Запускаю AI Productivity & Work...")
     try:
         if main_loop and client: run_ai_news_poster(client, main_loop, "AI Productivity & Work")
     except Exception as e: print(f"Помилка в SLOT 2: {e}")
 
 def ai_job_slot_3():
-    print("⏰ Час SLOT 3 (17:00)! Запускаю AI Finance & Dev Tools...")
-    try:
-        if main_loop and client: run_ai_news_poster(client, main_loop, "AI Finance & Dev Tools")
-    except Exception as e: print(f"Помилка в SLOT 3: {e}")
-
-def ai_job_slot_4():
-    print("⏰ Час SLOT 4 (21:00)! Запускаю AI Media & Creative...")
+    print(f"⏰ Час SLOT 3 ({config.AI_SLOT_3_TIME})! Запускаю AI Media & Creative...")
     try:
         if main_loop and client: run_ai_news_poster(client, main_loop, "AI Media & Creative")
-    except Exception as e: print(f"Помилка в SLOT 4: {e}")
+    except Exception as e: print(f"Помилка в SLOT 3: {e}")
 
 def psy_job_slot_1():
     print("⏰ Час PSY SLOT 1 (08:30)! Запускаю Morning Motivation...")
@@ -619,19 +613,15 @@ def daily_queue_job_psy():
 
 # Функції контролю зображень за 20 хвилин до публікації
 def check_ai_image_slot_1():
-    print("⏰ Контроль зображення: SLOT 1 (09:00)...")
+    print("⏰ Контроль зображення: SLOT 1 (10:00)...")
     if main_loop and client: run_image_control_check(client, main_loop, "ai", "AI News & Web3 Tech")
 
 def check_ai_image_slot_2():
-    print("⏰ Контроль зображення: SLOT 2 (13:00)...")
+    print("⏰ Контроль зображення: SLOT 2 (15:00)...")
     if main_loop and client: run_image_control_check(client, main_loop, "ai", "AI Productivity & Work")
 
 def check_ai_image_slot_3():
-    print("⏰ Контроль зображення: SLOT 3 (17:00)...")
-    if main_loop and client: run_image_control_check(client, main_loop, "ai", "AI Finance & Dev Tools")
-
-def check_ai_image_slot_4():
-    print("⏰ Контроль зображення: SLOT 4 (21:00)...")
+    print("⏰ Контроль зображення: SLOT 3 (20:00)...")
     if main_loop and client: run_image_control_check(client, main_loop, "ai", "AI Media & Creative")
 
 def check_psy_image_slot_1():
@@ -716,7 +706,6 @@ async def main():
         schedule.every().day.at(config.AI_SLOT_1_TIME, "Europe/Kyiv").do(ai_job_slot_1)
         schedule.every().day.at(config.AI_SLOT_2_TIME, "Europe/Kyiv").do(ai_job_slot_2)
         schedule.every().day.at(config.AI_SLOT_3_TIME, "Europe/Kyiv").do(ai_job_slot_3)
-        schedule.every().day.at(config.AI_SLOT_4_TIME, "Europe/Kyiv").do(ai_job_slot_4)
         # Психологія (Нейро-Апгрейд)
         schedule.every().day.at(config.PSY_SLOT_1_TIME, "Europe/Kyiv").do(psy_job_slot_1)
         schedule.every().day.at(config.PSY_SLOT_2_TIME, "Europe/Kyiv").do(psy_job_slot_2)
@@ -730,10 +719,9 @@ async def main():
 
         # Контрольні перевірки наявності зображень за 20 хвилин до публікації
         # Штучний Інтелект (AI)
-        schedule.every().day.at("08:40", "Europe/Kyiv").do(check_ai_image_slot_1)
-        schedule.every().day.at("12:40", "Europe/Kyiv").do(check_ai_image_slot_2)
-        schedule.every().day.at("16:40", "Europe/Kyiv").do(check_ai_image_slot_3)
-        schedule.every().day.at("20:40", "Europe/Kyiv").do(check_ai_image_slot_4)
+        schedule.every().day.at("09:40", "Europe/Kyiv").do(check_ai_image_slot_1)
+        schedule.every().day.at("14:40", "Europe/Kyiv").do(check_ai_image_slot_2)
+        schedule.every().day.at("19:40", "Europe/Kyiv").do(check_ai_image_slot_3)
         # Психологія (PSY)
         schedule.every().day.at("08:10", "Europe/Kyiv").do(check_psy_image_slot_1)
         schedule.every().day.at("13:40", "Europe/Kyiv").do(check_psy_image_slot_2)
@@ -749,8 +737,7 @@ async def main():
         print(f"📅 Зареєстровано розклад ШІ (Київ):")
         print(f"   - 1. AI News & Web3 Tech:        щодня о {config.AI_SLOT_1_TIME}")
         print(f"   - 2. AI Productivity & Work:     щодня о {config.AI_SLOT_2_TIME}")
-        print(f"   - 3. AI Finance & Dev Tools:     щодня о {config.AI_SLOT_3_TIME}")
-        print(f"   - 4. AI Media & Creative:        щодня о {config.AI_SLOT_4_TIME}")
+        print(f"   - 3. AI Media & Creative:        щодня о {config.AI_SLOT_3_TIME}")
         print(f"📅 Зареєстровано розклад Психології (Київ):")
         print(f"   - 1. Morning Motivation:         щодня о {config.PSY_SLOT_1_TIME}")
         print(f"   - 2. Practical Psychology:       щодня о {config.PSY_SLOT_2_TIME}")

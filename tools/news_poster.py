@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import asyncio
@@ -117,8 +117,10 @@ def select_and_rewrite_news_with_gemini(news_items):
 
 async def get_my_last_posts(client, channel_name, limit=15):
     """Зчитує останні limit повідомлень з власного каналу. Стійка до AuthKeyDuplicatedError."""
+    # Збільшуємо ліміт мінімум до 80, щоб охопити історію за 2-3 тижні і уникнути повторів новин
+    limit = max(limit, 80)
     posts = []
-    print(f"📖 Зчитую історію власного каналу {channel_name}...")
+    print(f"📖 Зчитую історію власного каналу {channel_name} (ліміт: {limit})...")
     try:
         if not client.is_connected():
             await client.connect()
@@ -858,7 +860,7 @@ async def fill_daily_queue(client, channel_filter="all"):
 
     # 2. Check and fill AI slots
     if channel_filter in ["ai", "all"]:
-        ai_categories = ["AI News & Web3 Tech", "AI Productivity & Work", "AI Finance & Dev Tools", "AI Media & Creative"]
+        ai_categories = ["AI News & Web3 Tech", "AI Productivity & Work", "AI Media & Creative"]
         
         rss_urls = getattr(config, 'AI_REPORTER_RSS_URLS', [])
         if not rss_urls:
