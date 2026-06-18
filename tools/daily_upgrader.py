@@ -4,12 +4,22 @@ import random
 import asyncio
 from aiogram import Bot
 from aiogram.types import FSInputFile
+import re
 
 # Додаємо корінь проекту до sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 from tools.gemini_client import gemini_post_with_retry
+
+# Clean HTML for Telegram (allowed tags: b, i, u, s, code, pre, strong, em, a, blockquote, tg-spoiler)
+def clean_html_for_telegram(text: str) -> str:
+    # Replace <br> tags with newline
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    # Remove any disallowed HTML tags
+    allowed = r"b|i|u|s|code|pre|strong|em|a|blockquote|tg-spoiler"
+    text = re.sub(rf"</?(?!{allowed})[a-zA-Z0-9]+[^>]*>", "", text)
+    return text
 
 formats = [
     "Термін дня",
