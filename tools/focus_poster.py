@@ -96,7 +96,9 @@ async def post_focus_day(client):
             post_text = post_text[:497] + "..."
             
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        image_path = os.path.join(project_root, '.tmp', 'focus_default.jpg')
+        # Use configurable focus image from config, default to .tmp/focus_default.jpg if not set
+        focus_image_rel = getattr(config, 'FOCUS_IMAGE', '.tmp/focus_default.jpg')
+        image_path = os.path.join(project_root, focus_image_rel)
         
         if os.path.exists(image_path):
             print(f"Sending Focus of the Day photo post to {config.TARGET_CHANNEL}...")

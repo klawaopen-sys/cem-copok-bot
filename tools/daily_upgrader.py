@@ -82,7 +82,9 @@ async def post_daily_upgrade():
             post_text = post_text[:1020] + "..."
             
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        image_path = os.path.join(project_root, '.tmp', 'daily_upgrade.jpg')
+        # Use configurable daily upgrade image from config, default to .tmp/daily_upgrade.jpg
+        daily_image_rel = getattr(config, 'DAILY_UPGRADE_IMAGE', '.tmp/daily_upgrade.jpg')
+        image_path = os.path.join(project_root, daily_image_rel)
         
         if os.path.exists(image_path):
             print(f"Sending photo post to {config.TARGET_CHANNEL}...")
