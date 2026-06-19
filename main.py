@@ -566,13 +566,13 @@ def psy_job_slot_1():
     except Exception as e: print(f"Помилка в PSY SLOT 1: {e}")
 
 def psy_job_slot_2():
-    print("⏰ Час PSY SLOT 2 (14:00)! Запускаю Practical Psychology...")
+    print(f"⏰ Час PSY SLOT 2 ({config.PSY_SLOT_2_TIME})! Запускаю Practical Psychology...")
     try:
         if main_loop and client: run_psy_news_poster(client, main_loop, "Practical Psychology")
     except Exception as e: print(f"Помилка в PSY SLOT 2: {e}")
 
 def psy_job_slot_3():
-    print("⏰ Час PSY SLOT 3 (19:00)! Запускаю Mindfulness & Relationships...")
+    print(f"⏰ Час PSY SLOT 3 ({config.PSY_SLOT_3_TIME})! Запускаю Mindfulness & Relationships...")
     try:
         if main_loop and client: run_psy_news_poster(client, main_loop, "Mindfulness & Relationships")
     except Exception as e: print(f"Помилка в PSY SLOT 3: {e}")
@@ -701,34 +701,34 @@ async def main():
         print("✅ Бот-Психолог успішно запущено!")
         
         # Трейдинг
-        schedule.every().day.at(config.MORNING_POST_TIME).do(morning_job)
-        schedule.every().day.at(config.FOCUS_POST_TIME).do(focus_job)
-        schedule.every().day.at("14:00").do(noon_job)
-        schedule.every().day.at(config.DAILY_UPGRADE_POST_TIME).do(daily_upgrade_job)
+        schedule.every().day.at(config.MORNING_POST_TIME, config.TIMEZONE).do(morning_job)
+        schedule.every().day.at(config.FOCUS_POST_TIME, config.TIMEZONE).do(focus_job)
+        schedule.every().day.at("14:00", config.TIMEZONE).do(noon_job)
+        schedule.every().day.at(config.DAILY_UPGRADE_POST_TIME, config.TIMEZONE).do(daily_upgrade_job)
         # Штучний Інтелект (AI)
-        schedule.every().day.at(config.AI_SLOT_1_TIME).do(ai_job_slot_1)
-        schedule.every().day.at(config.AI_SLOT_2_TIME).do(ai_job_slot_2)
-        schedule.every().day.at(config.AI_SLOT_3_TIME).do(ai_job_slot_3)
+        schedule.every().day.at(config.AI_SLOT_1_TIME, config.TIMEZONE).do(ai_job_slot_1)
+        schedule.every().day.at(config.AI_SLOT_2_TIME, config.TIMEZONE).do(ai_job_slot_2)
+        schedule.every().day.at(config.AI_SLOT_3_TIME, config.TIMEZONE).do(ai_job_slot_3)
         # Психологія (Нейро-Апгрейд)
-        schedule.every().day.at(config.PSY_SLOT_1_TIME).do(psy_job_slot_1)
-        schedule.every().day.at(config.PSY_SLOT_2_TIME).do(psy_job_slot_2)
-        schedule.every().day.at(config.PSY_SLOT_3_TIME).do(psy_job_slot_3)
+        schedule.every().day.at(config.PSY_SLOT_1_TIME, config.TIMEZONE).do(psy_job_slot_1)
+        schedule.every().day.at(config.PSY_SLOT_2_TIME, config.TIMEZONE).do(psy_job_slot_2)
+        schedule.every().day.at(config.PSY_SLOT_3_TIME, config.TIMEZONE).do(psy_job_slot_3)
         # Тижневий дайджест трейдингу (неділя о 18:00)
-        schedule.every().sunday.at("18:00").do(weekly_digest_job)
+        schedule.every().sunday.at("18:00", config.TIMEZONE).do(weekly_digest_job)
         # Нічна підготовка контенту (авточерга в Google Sheets)
         # Нічна підготовка контенту (роздільні завдання)
-        schedule.every().day.at("03:00").do(daily_queue_job_ai)
-        schedule.every().day.at("04:00").do(daily_queue_job_psy)
+        schedule.every().day.at("03:00", config.TIMEZONE).do(daily_queue_job_ai)
+        schedule.every().day.at("04:00", config.TIMEZONE).do(daily_queue_job_psy)
 
         # Контрольні перевірки наявності зображень за 20 хвилин до публікації
         # Штучний Інтелект (AI)
-        schedule.every().day.at("09:40").do(check_ai_image_slot_1)
-        schedule.every().day.at("14:40").do(check_ai_image_slot_2)
-        schedule.every().day.at("19:40").do(check_ai_image_slot_3)
+        schedule.every().day.at("09:40", config.TIMEZONE).do(check_ai_image_slot_1)
+        schedule.every().day.at("14:40", config.TIMEZONE).do(check_ai_image_slot_2)
+        schedule.every().day.at("19:40", config.TIMEZONE).do(check_ai_image_slot_3)
         # Психологія (PSY) — часи оновлено відповідно до нових слотів 08:30 / 13:30 / 19:30
-        schedule.every().day.at("08:10").do(check_psy_image_slot_1)
-        schedule.every().day.at("13:10").do(check_psy_image_slot_2)  # за 20хв до 13:30
-        schedule.every().day.at("19:10").do(check_psy_image_slot_3)  # за 20хв до 19:30
+        schedule.every().day.at("08:10", config.TIMEZONE).do(check_psy_image_slot_1)
+        schedule.every().day.at("13:10", config.TIMEZONE).do(check_psy_image_slot_2)  # за 20хв до 13:30
+        schedule.every().day.at("19:10", config.TIMEZONE).do(check_psy_image_slot_3)  # за 20хв до 19:30
 
         
         print(f"📅 Зареєстровано розклад трейдингу (Київ):")

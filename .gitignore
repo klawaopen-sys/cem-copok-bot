@@ -5,4 +5,12 @@ photo.jpg
 inspect_media.py
 scratch_inspect.py
 test_download.py
-.tmp/
+.tmp/*
+!.tmp/logo.jpg
+!.tmp/psy_logo.png
+!.tmp/ai_logo.png
+!.tmp/psy_default.png
+!.tmp/sunday_digest_default.png
+!.tmp/morning_default.png
+!.tmp/focus_default.jpg
+!.tmp/daily_upgrade.jpg
