@@ -638,13 +638,16 @@ def check_psy_image_slot_3():
 
 
 def schedule_thread_func():
-    """Фоновий потік для перевірки розкладу"""
+    """Фоновий потік для перевірки розкладу.
+    ВАЖЛИВО: sleep(10) — критично! sleep(30) міг пропускати задачі,
+    якщо планувальник прокидався після запланованого часу.
+    """
     while True:
         try:
             schedule.run_pending()
         except Exception as se:
             print(f"⚠️ Помилка у потоці планувальника: {se}")
-        time.sleep(30)
+        time.sleep(10)
 
 # ---------------------------------------------------------------------
 # В. Точка Запуску (Event Loop)
@@ -688,14 +691,14 @@ async def main():
         except Exception as e:
             print(f"⚠️ Не вдалося встановити команди для ботів: {e}")
 
-        # 2. Запуск Aiogram ботів тимчасово закоментовано локально для уникнення конфліктів із сервером
-        # await bot.delete_webhook(drop_pending_updates=True)
-        # asyncio.create_task(dp.start_polling(bot))
-        # print("✅ Бот-Бібліотекар успішно запущено!")
+        # 2. Запуск Aiogram ботів
+        await bot.delete_webhook(drop_pending_updates=True)
+        asyncio.create_task(dp.start_polling(bot))
+        print("✅ Бот-Бібліотекар успішно запущено!")
         
-        # await psy_bot.delete_webhook(drop_pending_updates=True)
-        # asyncio.create_task(psy_dp.start_polling(psy_bot))
-        # print("✅ Бот-Психолог успішно запущено!")
+        await psy_bot.delete_webhook(drop_pending_updates=True)
+        asyncio.create_task(psy_dp.start_polling(psy_bot))
+        print("✅ Бот-Психолог успішно запущено!")
         
         # Трейдинг
         schedule.every().day.at(config.MORNING_POST_TIME).do(morning_job)
@@ -722,10 +725,10 @@ async def main():
         schedule.every().day.at("09:40").do(check_ai_image_slot_1)
         schedule.every().day.at("14:40").do(check_ai_image_slot_2)
         schedule.every().day.at("19:40").do(check_ai_image_slot_3)
-        # Психологія (PSY)
+        # Психологія (PSY) — часи оновлено відповідно до нових слотів 08:30 / 13:30 / 19:30
         schedule.every().day.at("08:10").do(check_psy_image_slot_1)
-        schedule.every().day.at("13:40").do(check_psy_image_slot_2)
-        schedule.every().day.at("18:40").do(check_psy_image_slot_3)
+        schedule.every().day.at("13:10").do(check_psy_image_slot_2)  # за 20хв до 13:30
+        schedule.every().day.at("19:10").do(check_psy_image_slot_3)  # за 20хв до 19:30
 
         
         print(f"📅 Зареєстровано розклад трейдингу (Київ):")

@@ -24,7 +24,9 @@ def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries=3, in
             api_keys.append(k_val)
             
     # List of valid active model names on the API
-    models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-2.0-flash", "gemini-2.5-pro"]
+    # ВАЖЛИВО: gemini-3.5-flash та gemini-3.1-flash-lite НЕ ІСНУЮТЬ → 404 → прибрано
+    # gemini-flash-latest — застарілий аліас, замінено на конкретні версії
+    models = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.5-pro"]
     
     # Identify the current model in the url
     current_model = "gemini-flash-latest"
