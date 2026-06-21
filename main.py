@@ -4,6 +4,8 @@ import asyncio
 import threading
 import os
 import re
+import aiohttp
+import json
 from telethon import TelegramClient
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, CallbackQuery, PreCheckoutQuery, LabeledPrice
@@ -11,6 +13,112 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
+
+async def send_rich_message_http(bot_token: str, chat_id: int, html_content: str, reply_markup: dict = None) -> dict:
+    url = f"https://api.telegram.org/bot{bot_token}/sendRichMessage"
+    payload = {
+        "chat_id": chat_id,
+        "rich_message": {
+            "html": html_content
+        }
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=payload) as resp:
+            return await resp.json()
+
+async def send_rich_message_draft_http(bot_token: str, chat_id: int, draft_id: int, html_content: str) -> dict:
+    url = f"https://api.telegram.org/bot{bot_token}/sendRichMessageDraft"
+    payload = {
+        "chat_id": chat_id,
+        "draft_id": draft_id,
+        "rich_message": {
+            "html": html_content
+        }
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=payload) as resp:
+            return await resp.json()
+
+async def edit_rich_message_http(bot_token: str, chat_id: int, message_id: int, html_content: str, reply_markup: dict = None) -> dict:
+    url = f"https://api.telegram.org/bot{bot_token}/editMessageText"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "rich_message": {
+            "html": html_content
+        }
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=payload) as resp:
+            return await resp.json()
+
+async def get_gemini_streaming_reply(api_key: str, history: list, system_prompt: str, chat_id: int, bot_token: str, reply_markup: dict = None) -> str:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key={api_key}&alt=sse"
+    payload = {
+        "contents": history,
+        "systemInstruction": {
+            "parts": [{"text": system_prompt}]
+        }
+    }
+    draft_id = chat_id
+    await send_rich_message_draft_http(bot_token, chat_id, draft_id, "<tg-thinking>Аналізую ваші слова...</tg-thinking>")
+    
+    accumulated_text = ""
+    last_update_time = time.time()
+    headers = {"Content-Type": "application/json"}
+    
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(url, json=payload, headers=headers) as resp:
+                if resp.status == 200:
+                    async for line in resp.content:
+                        line_str = line.decode('utf-8').strip()
+                        if line_str.startswith("data:"):
+                            json_str = line_str[5:].strip()
+                            try:
+                                data = json.loads(json_str)
+                                part_text = data['candidates'][0]['content']['parts'][0]['text']
+                                accumulated_text += part_text
+                                now = time.time()
+                                if now - last_update_time > 1.2:
+                                    formatted_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
+                                    await send_rich_message_draft_http(bot_token, chat_id, draft_id, formatted_html)
+                                    last_update_time = now
+                            except Exception:
+                                pass
+                else:
+                    fallback_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?key={api_key}&alt=sse"
+                    async with session.post(fallback_url, json=payload, headers=headers) as fallback_resp:
+                        if fallback_resp.status == 200:
+                            async for line in fallback_resp.content:
+                                line_str = line.decode('utf-8').strip()
+                                if line_str.startswith("data:"):
+                                    json_str = line_str[5:].strip()
+                                    try:
+                                        data = json.loads(json_str)
+                                        part_text = data['candidates'][0]['content']['parts'][0]['text']
+                                        accumulated_text += part_text
+                                        now = time.time()
+                                        if now - last_update_time > 1.2:
+                                            formatted_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
+                                            await send_rich_message_draft_http(bot_token, chat_id, draft_id, formatted_html)
+                                            last_update_time = now
+                                    except Exception:
+                                        pass
+        except Exception as e:
+            print(f"Streaming error: {e}")
+            
+    if accumulated_text.strip():
+        final_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
+        await send_rich_message_http(bot_token, chat_id, final_html, reply_markup)
+        return accumulated_text.strip()
+    return None
+
+
 
 # Імпорт логіки публікацій
 from tools.poster import run_poster
@@ -370,13 +478,11 @@ async def handle_psychologist_chat(message: Message, state: FSMContext):
     
     system_prompt = (
         "Ти — професійний, емпатичний та теплий практичний психотерапевт. "
-        "Твоя мета — вислухати користувача, підтримати його, допомогти проаналізувати свої емоції та знизити рівень стресу. "
+        "Твоя мета — вислухати користувача, підтримати його, допомогти проаналізувати свої емоції та знизити уровень стресу. "
         "Пиши виключно українською мовою. Спілкуйся м'яко, не давай сухих шаблонних відповідей робота. "
         "Став відкриті запитання, використовуй активне слухання. Заборонено ставити діагнози чи виписувати ліки. "
         "Якщо людина говорить про self-harm або критичну депресію, вислови максимальну турботу та м'яко запропонуй контакти служб підтримки."
     )
-    
-    import requests
     
     api_key = getattr(config, 'GEMINI_PSY_API_KEY', config.GEMINI_API_KEY)
     if not api_key or api_key.startswith('AQ.'):
@@ -394,32 +500,41 @@ async def handle_psychologist_chat(message: Message, state: FSMContext):
     if len(history) > 12:
         history = history[-12:]
         
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
-    headers = {"Content-Type": "application/json"}
+    # Запускаємо асинхронний стримінг
+    ai_reply = await get_gemini_streaming_reply(api_key, history, system_prompt, message.chat.id, config.PSY_BOT_TOKEN)
     
-    payload = {
-        "contents": history,
-        "systemInstruction": {
-            "parts": [{"text": system_prompt}]
+    if ai_reply:
+        history.append({
+            "role": "model",
+            "parts": [{"text": ai_reply}]
+        })
+        await state.update_data(history=history)
+    else:
+        # Резервний варіант (fallback) при помилці стримінгу
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "contents": history,
+            "systemInstruction": {
+                "parts": [{"text": system_prompt}]
+            }
         }
-    }
-    
-    try:
-        r = gemini_post_with_retry(url, headers, payload, timeout=30)
-        if r.status_code == 200:
-            ai_reply = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-            history.append({
-                "role": "model",
-                "parts": [{"text": ai_reply}]
-            })
-            await state.update_data(history=history)
-            await message.answer(ai_reply, parse_mode="HTML")
-        else:
-            print(f"Gemini API Error in Psy Chat: {r.status_code} - {r.text}")
+        try:
+            r = gemini_post_with_retry(url, headers, payload, timeout=30)
+            if r.status_code == 200:
+                ai_reply = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+                history.append({
+                    "role": "model",
+                    "parts": [{"text": ai_reply}]
+                })
+                await state.update_data(history=history)
+                await message.answer(ai_reply, parse_mode="HTML")
+            else:
+                await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати ще раз трохи пізніше.")
+        except Exception as e:
+            print(f"Exception in Psy Chat fallback: {e}")
             await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати ще раз трохи пізніше.")
-    except Exception as e:
-        print(f"Exception in Psy Chat Gemini call: {e}")
-        await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати ще раз трохи пізніше.")
+
 
 @psy_router.message(PsyChatStates.in_chat, F.voice)
 async def handle_psychologist_voice(message: Message, state: FSMContext):
@@ -498,33 +613,41 @@ async def handle_psychologist_voice(message: Message, state: FSMContext):
     if len(history) > 12:
         history = history[-12:]
         
-    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
-    gemini_headers = {"Content-Type": "application/json"}
+    # Запускаємо асинхронний стримінг
+    ai_reply = await get_gemini_streaming_reply(api_key, history, system_prompt, message.chat.id, config.PSY_BOT_TOKEN)
     
-    payload = {
-        "contents": history,
-        "systemInstruction": {
-            "parts": [{"text": system_prompt}]
+    if ai_reply:
+        history.append({
+            "role": "model",
+            "parts": [{"text": ai_reply}]
+        })
+        await state.update_data(history=history)
+    else:
+        # Резервний варіант (fallback) при помилці стримінгу
+        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
+        gemini_headers = {"Content-Type": "application/json"}
+        payload = {
+            "contents": history,
+            "systemInstruction": {
+                "parts": [{"text": system_prompt}]
+            }
         }
-    }
-    
-    try:
-        r = gemini_post_with_retry(gemini_url, gemini_headers, payload, timeout=30)
-        if r.status_code == 200:
-            ai_reply = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-            history.append({
-                "role": "model",
-                "parts": [{"text": ai_reply}]
-            })
-            await state.update_data(history=history)
-            
-            await message.answer(ai_reply, parse_mode="HTML")
-        else:
-            print(f"Gemini API Error in Psy Chat Voice: {r.status_code} - {r.text}")
+        try:
+            r = gemini_post_with_retry(gemini_url, gemini_headers, payload, timeout=30)
+            if r.status_code == 200:
+                ai_reply = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+                history.append({
+                    "role": "model",
+                    "parts": [{"text": ai_reply}]
+                })
+                await state.update_data(history=history)
+                await message.answer(ai_reply, parse_mode="HTML")
+            else:
+                await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати або записати ще раз трохи пізніше.")
+        except Exception as e:
+            print(f"Exception in Psy Chat Voice fallback: {e}")
             await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати або записати ще раз трохи пізніше.")
-    except Exception as e:
-        print(f"Exception in Psy Chat Voice Gemini call: {e}")
-        await message.answer("🧠 Я почув тебе і глибоко задумався над твоїми словами... Спробуй, будь ласка, написати або записати ще раз трохи пізніше.")
+
 
 
 # ---------------------------------------------------------------------
