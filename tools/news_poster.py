@@ -117,8 +117,8 @@ def select_and_rewrite_news_with_gemini(news_items):
 
 async def get_my_last_posts(client, channel_name, limit=15):
     """Зчитує останні limit повідомлень з власного каналу. Стійка до AuthKeyDuplicatedError."""
-    # Збільшуємо ліміт мінімум до 80, щоб охопити історію за 2-3 тижні і уникнути повторів новин
-    limit = max(limit, 80)
+    # Збільшуємо ліміт мінімум до 15, щоб уникнути повторів недавніх новин
+    limit = max(limit, 15)
     posts = []
     print(f"📖 Зчитую історію власного каналу {channel_name} (ліміт: {limit})...")
     try:
