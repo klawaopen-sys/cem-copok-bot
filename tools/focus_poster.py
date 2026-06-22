@@ -87,8 +87,55 @@ async def post_focus_day(client):
     
     post_text = generate_focus_text(sources_text)
     if not post_text or "NO_DATA" in post_text or post_text.strip() == "NO_DATA":
-        print("ℹ️ Немає підтверджених рівнів або аналітики у джерелах. Публікація скасовується.")
-        return False
+        print("ℹ️ Немає підтверджених рівнів або аналітики у джерелах. Запускаємо генерацію фолбеку через CoinMarketCap...")
+        try:
+            from tools.crypto_parser import get_crypto_prices, get_btc_levels
+            prices = get_crypto_prices()
+            btc_price = None
+            if prices and 'BTC' in prices:
+                btc_price = prices['BTC']['price']
+            
+            if not btc_price:
+                print("⚠️ Не вдалося отримати ціну BTC з CoinMarketCap. Використовуємо дефолтне значення.")
+                btc_price = 65000.0
+                
+            support, resistance = get_btc_levels(btc_price)
+            
+            # Запитуємо у Gemini написати короткий опис ринку (сценарій)
+            fallback_prompt = (
+                "Ти — професійний криптовалютний аналітик каналу 'Сім сорок'. "
+                "Тобі потрібно написати короткий ринковий сценарій для Bitcoin (BTC) на сьогодні. "
+                "Він має бути корисним, написаним гарною українською мовою та відповідати поточному ринковому контексту.\n\n"
+                f"Поточна ціна Bitcoin: ${btc_price:,.2f}.\n"
+                f"Джерела новин:\n{sources_text if sources_text else 'Стабільна ринкова активність, очікування макроекономічних даних.'}\n\n"
+                "Напиши ТІЛЬКИ короткий ринковий сценарій (1-2 речення, до 250 символів) без вступних слів, лапок або форматування. Починай одразу з суті."
+            )
+            
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
+            headers = {"Content-Type": "application/json"}
+            payload = {"contents": [{"parts": [{"text": fallback_prompt}]}]}
+            
+            scenario = "На ринку спостерігається консолідація в очікуванні подальших макроекономічних тригерів. Рекомендується дотримуватись ризик-менеджменту."
+            try:
+                r = gemini_post_with_retry(url, headers, payload, timeout=25)
+                if r.status_code == 200:
+                    scenario = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+                    scenario = scenario.strip('"`\'')
+            except Exception as e:
+                print(f"Exception during fallback scenario generation: {e}")
+                
+            post_text = (
+                "🎯 <b>Фокус дня: BTC</b>\n\n"
+                f"🔑 <b>Підтримка:</b>\n"
+                f"${support.replace(' / ', ' / $')}\n\n"
+                f"🚧 <b>Опір:</b>\n"
+                f"${resistance}\n\n"
+                f"📊 <b>Сценарій:</b>\n"
+                f"{scenario}"
+            )
+        except Exception as fe:
+            print(f"❌ Помилка під час генерації фолбеку: {fe}")
+            return False
         
     bot = Bot(token=config.BOT_TOKEN)
     try:
