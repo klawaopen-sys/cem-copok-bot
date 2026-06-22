@@ -38,7 +38,7 @@ def get_gemini_real_estate_comment(post_text):
             "- Текст коментаря має бути коротким, живим та ємним.\n\n"
             f"Текст поста:\n{post_text}"
         )
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         from tools.gemini_client import gemini_post_with_retry
@@ -77,7 +77,7 @@ def get_gemini_manicure_comment(post_text):
             "- Текст коментаря має бути коротким, живим та ніжним.\n\n"
             f"Текст поста:\n{post_text}"
         )
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         from tools.gemini_client import gemini_post_with_retry
@@ -116,7 +116,7 @@ def get_gemini_comment(post_text):
             "- Текст коментаря має бути коротким, живим та ємним.\n\n"
             f"Текст поста:\n{post_text}"
         )
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         from tools.gemini_client import gemini_post_with_retry
@@ -151,7 +151,7 @@ def get_gemini_psychology_rewrite(post_text):
             "5. Напиши ТІЛЬКИ текст рерайту без будь-яких вступних слів, привітань, лапок чи завершальних фраз. Починай одразу з суті.\n\n"
             f"Оригінальний пост:\n{post_text}"
         )
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         from tools.gemini_client import gemini_post_with_retry

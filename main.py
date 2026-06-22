@@ -511,7 +511,7 @@ async def handle_psychologist_chat(message: Message, state: FSMContext):
         await state.update_data(history=history)
     else:
         # Резервний варіант (fallback) при помилці стримінгу
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         headers = {"Content-Type": "application/json"}
         payload = {
             "contents": history,
@@ -624,7 +624,7 @@ async def handle_psychologist_voice(message: Message, state: FSMContext):
         await state.update_data(history=history)
     else:
         # Резервний варіант (fallback) при помилці стримінгу
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
+        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         gemini_headers = {"Content-Type": "application/json"}
         payload = {
             "contents": history,

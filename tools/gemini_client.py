@@ -29,7 +29,7 @@ def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries=3, in
     models = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.5-pro"]
     
     # Identify the current model in the url
-    current_model = "gemini-flash-latest"
+    current_model = "gemini-2.5-flash"
     model_match = re.search(r'/models/([^:]+):', url)
     if model_match:
         current_model = model_match.group(1)

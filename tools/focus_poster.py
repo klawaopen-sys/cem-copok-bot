@@ -61,7 +61,7 @@ def generate_focus_text(sources_text):
         "Відповідь (або пост за шаблоном, або слово NO_DATA):"
     )
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{
@@ -111,7 +111,7 @@ async def post_focus_day(client):
                 "Напиши ТІЛЬКИ короткий ринковий сценарій (1-2 речення, до 250 символів) без вступних слів, лапок або форматування. Починай одразу з суті."
             )
             
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
             headers = {"Content-Type": "application/json"}
             payload = {"contents": [{"parts": [{"text": fallback_prompt}]}]}
             

@@ -54,7 +54,7 @@ def generate_daily_upgrade_text(format_name):
         "Напиши тільки сам текст поста з HTML-тегами, без вступних фраз чи лапок."
     )
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={config.GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={config.GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{
