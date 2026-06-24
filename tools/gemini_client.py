@@ -48,14 +48,75 @@ def translate_gemini_to_openai(json_payload):
         
     return messages
 
-def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries=3, initial_backoff=2):
+def _attempt_groq_fallback(json_payload):
+    import config
+    try:
+        groq_key = getattr(config, 'GROQ_API_KEY', None)
+        if not groq_key:
+            parent_config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
+            if os.path.exists(parent_config_path):
+                with open(parent_config_path, "r") as f:
+                    parent_cfg = json.load(f)
+                    groq_key = parent_cfg.get("api_key")
+                    
+        if groq_key:
+            groq_url = 'https://api.groq.com/openai/v1/chat/completions'
+            headers_groq = {
+                'Authorization': f'Bearer {groq_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            messages = translate_gemini_to_openai(json_payload)
+            groq_payload = {
+                'model': 'llama-3.3-70b-versatile',
+                'messages': messages
+            }
+            
+            print("🔌 [Gemini Client] Attempting Groq request (Llama-3.3)...")
+            groq_resp = requests.post(groq_url, json=groq_payload, headers=headers_groq, timeout=30)
+            
+            if groq_resp.status_code == 200:
+                groq_text = groq_resp.json()['choices'][0]['message']['content'].strip()
+                print("✅ [Gemini Client] Groq request successful!")
+                
+                gemini_compatible_json = {
+                    "candidates": [
+                        {
+                            "content": {
+                                "parts": [
+                                    {
+                                        "text": groq_text
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+                return MockResponse(gemini_compatible_json, 200)
+            else:
+                print(f"❌ [Gemini Client] Groq request failed with code {groq_resp.status_code}: {groq_resp.text}")
+        else:
+            print("❌ [Gemini Client] No Groq API Key found.")
+    except Exception as e:
+        print(f"❌ [Gemini Client] Exception during Groq request: {e}")
+    return None
+
+def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries=3, initial_backoff=2, prefer_groq=False):
     """
     Performs a requests.post call to the Gemini API with exponential backoff retries.
     Rotates both API keys (from config) and model versions to prevent 503 and 429 errors.
+    If prefer_groq is True, attempts Groq request first.
     If all Gemini keys fail (e.g. 429 Out of Quota), automatically falls back to Groq Llama-3.3.
     """
     import config
     
+    if prefer_groq:
+        print("🌟 [Gemini Client] prefer_groq=True specified. Trying Groq first...")
+        groq_res = _attempt_groq_fallback(json_payload)
+        if groq_res is not None and groq_res.status_code == 200:
+            return groq_res
+        print("⚠️ [Gemini Client] Groq failed or was not configured. Falling back to Gemini key rotation...")
+        
     # Collect all available API keys, starting with the original one in the URL
     original_key_match = re.search(r'key=([^&]+)', url)
     original_key = original_key_match.group(1) if original_key_match else ""
@@ -113,55 +174,9 @@ def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries=3, in
     # Final fallback to Groq if Gemini did not return a successful 200 response
     if last_response is None or last_response.status_code != 200:
         print("🚨 [Gemini Client] Gemini failed or returned non-200. Falling back to Groq...")
-        try:
-            groq_key = getattr(config, 'GROQ_API_KEY', None)
-            if not groq_key:
-                parent_config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
-                if os.path.exists(parent_config_path):
-                    with open(parent_config_path, "r") as f:
-                        parent_cfg = json.load(f)
-                        groq_key = parent_cfg.get("api_key")
-                        
-            if groq_key:
-                groq_url = 'https://api.groq.com/openai/v1/chat/completions'
-                headers_groq = {
-                    'Authorization': f'Bearer {groq_key}',
-                    'Content-Type': 'application/json'
-                }
-                
-                messages = translate_gemini_to_openai(json_payload)
-                groq_payload = {
-                    'model': 'llama-3.3-70b-versatile',
-                    'messages': messages
-                }
-                
-                print("🔌 [Gemini Client] Attempting fallback request to Groq (Llama-3.3)...")
-                groq_resp = requests.post(groq_url, json=groq_payload, headers=headers_groq, timeout=30)
-                
-                if groq_resp.status_code == 200:
-                    groq_text = groq_resp.json()['choices'][0]['message']['content'].strip()
-                    print("✅ [Gemini Client] Groq fallback successful!")
-                    
-                    gemini_compatible_json = {
-                        "candidates": [
-                            {
-                                "content": {
-                                    "parts": [
-                                        {
-                                            "text": groq_text
-                                        }
-                                    ]
-                                }
-                            }
-                        ]
-                    }
-                    return MockResponse(gemini_compatible_json, 200)
-                else:
-                    print(f"❌ [Gemini Client] Groq fallback failed with code {groq_resp.status_code}: {groq_resp.text}")
-            else:
-                print("❌ [Gemini Client] No Groq API Key found for fallback.")
-        except Exception as e:
-            print(f"❌ [Gemini Client] Exception during Groq fallback: {e}")
+        groq_res = _attempt_groq_fallback(json_payload)
+        if groq_res is not None and groq_res.status_code == 200:
+            return groq_res
             
     # Final fallback attempt using original URL if last_response is still None and Groq failed
     if last_response is None:

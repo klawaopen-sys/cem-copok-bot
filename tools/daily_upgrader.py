@@ -65,7 +65,7 @@ def generate_daily_upgrade_text(format_name):
     }
     
     try:
-        r = gemini_post_with_retry(url, headers, payload, timeout=20)
+        r = gemini_post_with_retry(url, headers, payload, timeout=20, prefer_groq=True)
         if r.status_code == 200:
             data = r.json()
             post_text = data['candidates'][0]['content']['parts'][0]['text'].strip()
@@ -90,6 +90,9 @@ async def post_daily_upgrade():
             
         if len(post_text) > 1024:
             post_text = post_text[:1020] + "..."
+            
+        from tools.news_poster import sleep_until_time
+        await sleep_until_time(config.DAILY_UPGRADE_POST_TIME)
             
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         # Use configurable daily upgrade image from config, default to .tmp/daily_upgrade.jpg

@@ -231,6 +231,8 @@ async def post_morning_report():
 
         # 4. Publish to Telegram
         print("🚀 Публікую пост у канал...")
+        from tools.news_poster import sleep_until_time
+        await sleep_until_time(config.MORNING_POST_TIME)
         message_id = None
         
         local_img = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.tmp', 'morning_default.png')

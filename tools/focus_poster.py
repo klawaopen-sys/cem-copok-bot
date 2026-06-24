@@ -142,6 +142,9 @@ async def post_focus_day(client):
         if len(post_text) > 500:
             post_text = post_text[:497] + "..."
             
+        from tools.news_poster import sleep_until_time
+        await sleep_until_time(config.FOCUS_POST_TIME)
+            
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         # Use configurable focus image from config, default to .tmp/focus_default.jpg if not set
         focus_image_rel = getattr(config, 'FOCUS_IMAGE', '.tmp/focus_default.jpg')

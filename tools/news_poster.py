@@ -17,6 +17,27 @@ import base64
 from tools.news_reporter import fetch_rss_news
 from tools.gemini_client import gemini_post_with_retry
 
+async def sleep_until_time(target_time_str):
+    """
+    Sleeps until the target time (format 'HH:MM') is reached.
+    If target time is in the past, or more than 10 minutes in the future, returns immediately.
+    """
+    tz = pytz.timezone('Europe/Kyiv')
+    now = datetime.now(tz)
+    try:
+        target_h, target_m = map(int, target_time_str.split(':'))
+        target_dt = now.replace(hour=target_h, minute=target_m, second=0, microsecond=0)
+        
+        if now >= target_dt:
+            return
+            
+        diff = (target_dt - now).total_seconds()
+        if 0 < diff <= 600:
+            print(f"⏳ [Scheduler] Content is ready early. Sleeping for {diff:.1f} seconds until exactly {target_time_str}...")
+            await asyncio.sleep(diff)
+    except Exception as e:
+        print(f"⚠️ Error in sleep_until_time: {e}")
+
 def limit_caption_text(text, max_len=1024):
     """Ensures caption text is within Telegram limit and doesn't contain broken HTML"""
     if len(text) <= max_len:
@@ -134,7 +155,7 @@ async def get_my_last_posts(client, channel_name, limit=15):
         print("🔄 Перемикаюсь в режим симуляції (порожня історія).")
     return posts
 
-def select_and_compile_with_gemini(news_list, my_last_posts, category_name, channel_type):
+def select_and_compile_with_gemini(news_list, my_last_posts, category_name, channel_type, prefer_groq=False):
     """Вибирає тренд з RSS, перевіряє на дублікати та комбінує пост з 3+ джерел"""
     if not config.GEMINI_API_KEY:
         print("❌ Помилка: Ключ Gemini не знайдено!")
@@ -211,7 +232,7 @@ def select_and_compile_with_gemini(news_list, my_last_posts, category_name, chan
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
-        r = gemini_post_with_retry(url, headers, payload, timeout=45)
+        r = gemini_post_with_retry(url, headers, payload, timeout=45, prefer_groq=prefer_groq)
         if r.status_code == 200:
             res_json = r.json()
             response_text = res_json['candidates'][0]['content']['parts'][0]['text'].strip()
@@ -879,7 +900,8 @@ async def fill_daily_queue(client, channel_filter="all"):
                 continue
                 
             print(f"📦 Preparing AI post for category '{cat}'...")
-            post_data = select_and_compile_with_gemini(news_list, my_last_posts, cat, "ai")
+            prefer_groq_val = (cat == "AI Productivity & Work")
+            post_data = select_and_compile_with_gemini(news_list, my_last_posts, cat, "ai", prefer_groq=prefer_groq_val)
             if post_data and post_data.get("post_text"):
                 post_text = post_data["post_text"]
                 image_prompt = post_data["image_prompt"]
@@ -937,7 +959,8 @@ async def fill_daily_queue(client, channel_filter="all"):
                 continue
                 
             print(f"📦 Preparing PSY post for category '{cat}'...")
-            post_data = select_and_compile_with_gemini(news_list, my_last_posts, cat, "psy")
+            prefer_groq_val = (cat == "Practical Psychology")
+            post_data = select_and_compile_with_gemini(news_list, my_last_posts, cat, "psy", prefer_groq=prefer_groq_val)
             if post_data and post_data.get("post_text"):
                 post_text = post_data["post_text"]
                 image_prompt = post_data["image_prompt"]
@@ -1020,6 +1043,7 @@ async def post_news_report(client):
 
         # Публікація
         try:
+            await sleep_until_time("14:00")
             if photo_path and os.path.exists(photo_path):
                 caption_text, parse_mode = limit_caption_text(post_text, 1024)
                 await bot.send_photo(
@@ -1052,6 +1076,13 @@ async def post_news_report(client):
 async def post_ai_category_update(client, category_name):
     """Публікує пост ІИ під конкретний слот/категорію"""
     print(f"🚀 Початок публікації для ШІ-категорії '{category_name}'...")
+    target_time = None
+    if category_name == "AI News & Web3 Tech":
+        target_time = config.AI_SLOT_1_TIME
+    elif category_name == "AI Productivity & Work":
+        target_time = config.AI_SLOT_2_TIME
+    elif category_name == "AI Media & Creative":
+        target_time = config.AI_SLOT_3_TIME
     try:
         # 1. Спробуємо знайти пост у черзі в Google Таблиці
         try:
@@ -1089,6 +1120,8 @@ async def post_ai_category_update(client, category_name):
                 try:
                     if not client.is_connected():
                         await client.connect()
+                    if target_time:
+                        await sleep_until_time(target_time)
                     if photo_path and os.path.exists(photo_path):
                         msg = await client.send_message(
                             entity=config.AI_TARGET_CHANNEL,
@@ -1145,7 +1178,8 @@ async def post_ai_category_update(client, category_name):
             return
 
         my_last_posts = await get_my_last_posts(client, config.AI_TARGET_CHANNEL, limit=15)
-        post_data = select_and_compile_with_gemini(news_list, my_last_posts, category_name, "ai")
+        prefer_groq_val = (category_name == "AI Productivity & Work")
+        post_data = select_and_compile_with_gemini(news_list, my_last_posts, category_name, "ai", prefer_groq=prefer_groq_val)
         if not post_data or not post_data.get("post_text"):
             print("❌ Не вдалося згенерувати ШІ-пост.")
             return
@@ -1203,6 +1237,8 @@ async def post_ai_category_update(client, category_name):
         try:
             if not client.is_connected():
                 await client.connect()
+            if target_time:
+                await sleep_until_time(target_time)
             if photo_path and os.path.exists(photo_path):
                 msg = await client.send_message(
                     entity=config.AI_TARGET_CHANNEL,
@@ -1371,6 +1407,7 @@ async def post_weekly_digest(client):
 
                 
         # Публікація в канал
+        await sleep_until_time("18:00")
         if photo_path and os.path.exists(photo_path):
             caption_text, parse_mode = limit_caption_text(digest_text, 1024)
             await bot.send_photo(
@@ -1496,6 +1533,13 @@ def select_and_rewrite_psy_with_gemini(news_list, category_name):
 async def post_psy_category_update(client, category_name):
     """Публікує пост психології під конкретний слот/категорію"""
     print(f"🚀 Початок публікації для психологічної категорії '{category_name}'...")
+    target_time = None
+    if category_name == "Morning Motivation":
+        target_time = config.PSY_SLOT_1_TIME
+    elif category_name == "Practical Psychology":
+        target_time = config.PSY_SLOT_2_TIME
+    elif category_name == "Mindfulness & Relationships":
+        target_time = config.PSY_SLOT_3_TIME
     try:
         # 1. Спробуємо знайти пост у черзі в Google Таблиці
         try:
@@ -1533,6 +1577,8 @@ async def post_psy_category_update(client, category_name):
                 try:
                     if not client.is_connected():
                         await client.connect()
+                    if target_time:
+                        await sleep_until_time(target_time)
                     if photo_path and os.path.exists(photo_path):
                         await client.send_message(
                             entity=config.PSY_TARGET_CHANNEL,
@@ -1593,7 +1639,8 @@ async def post_psy_category_update(client, category_name):
             return
 
         my_last_posts = await get_my_last_posts(client, config.PSY_TARGET_CHANNEL, limit=15)
-        post_data = select_and_compile_with_gemini(news_list, my_last_posts, category_name, "psy")
+        prefer_groq_val = (category_name == "Practical Psychology")
+        post_data = select_and_compile_with_gemini(news_list, my_last_posts, category_name, "psy", prefer_groq=prefer_groq_val)
         if not post_data or not post_data.get("post_text"):
             print("❌ Не вдалося згенерувати post з психології.")
             return
@@ -1626,6 +1673,8 @@ async def post_psy_category_update(client, category_name):
         try:
             if not client.is_connected():
                 await client.connect()
+            if target_time:
+                await sleep_until_time(target_time)
             if photo_path and os.path.exists(photo_path):
                 is_default = (photo_path.endswith("psy_default.png"))
                 await client.send_message(

@@ -823,21 +823,34 @@ async def main():
         asyncio.create_task(psy_dp.start_polling(psy_bot))
         print("✅ Бот-Психолог успішно запущено!")
         
+        def get_time_minus_minutes(time_str, minutes=2):
+            try:
+                h, m = map(int, time_str.split(':'))
+                total_mins = h * 60 + m - minutes
+                if total_mins < 0:
+                    total_mins += 24 * 60
+                new_h = (total_mins // 60) % 24
+                new_m = total_mins % 60
+                return f"{new_h:02d}:{new_m:02d}"
+            except Exception as e:
+                print(f"Error shifting time {time_str}: {e}")
+                return time_str
+
         # Трейдинг
-        schedule.every().day.at(config.MORNING_POST_TIME, config.TIMEZONE).do(morning_job)
-        schedule.every().day.at(config.FOCUS_POST_TIME, config.TIMEZONE).do(focus_job)
-        schedule.every().day.at("14:00", config.TIMEZONE).do(noon_job)
-        schedule.every().day.at(config.DAILY_UPGRADE_POST_TIME, config.TIMEZONE).do(daily_upgrade_job)
+        schedule.every().day.at(get_time_minus_minutes(config.MORNING_POST_TIME), config.TIMEZONE).do(morning_job)
+        schedule.every().day.at(get_time_minus_minutes(config.FOCUS_POST_TIME), config.TIMEZONE).do(focus_job)
+        schedule.every().day.at(get_time_minus_minutes("14:00"), config.TIMEZONE).do(noon_job)
+        schedule.every().day.at(get_time_minus_minutes(config.DAILY_UPGRADE_POST_TIME), config.TIMEZONE).do(daily_upgrade_job)
         # Штучний Інтелект (AI)
-        schedule.every().day.at(config.AI_SLOT_1_TIME, config.TIMEZONE).do(ai_job_slot_1)
-        schedule.every().day.at(config.AI_SLOT_2_TIME, config.TIMEZONE).do(ai_job_slot_2)
-        schedule.every().day.at(config.AI_SLOT_3_TIME, config.TIMEZONE).do(ai_job_slot_3)
+        schedule.every().day.at(get_time_minus_minutes(config.AI_SLOT_1_TIME), config.TIMEZONE).do(ai_job_slot_1)
+        schedule.every().day.at(get_time_minus_minutes(config.AI_SLOT_2_TIME), config.TIMEZONE).do(ai_job_slot_2)
+        schedule.every().day.at(get_time_minus_minutes(config.AI_SLOT_3_TIME), config.TIMEZONE).do(ai_job_slot_3)
         # Психологія (Нейро-Апгрейд)
-        schedule.every().day.at(config.PSY_SLOT_1_TIME, config.TIMEZONE).do(psy_job_slot_1)
-        schedule.every().day.at(config.PSY_SLOT_2_TIME, config.TIMEZONE).do(psy_job_slot_2)
-        schedule.every().day.at(config.PSY_SLOT_3_TIME, config.TIMEZONE).do(psy_job_slot_3)
+        schedule.every().day.at(get_time_minus_minutes(config.PSY_SLOT_1_TIME), config.TIMEZONE).do(psy_job_slot_1)
+        schedule.every().day.at(get_time_minus_minutes(config.PSY_SLOT_2_TIME), config.TIMEZONE).do(psy_job_slot_2)
+        schedule.every().day.at(get_time_minus_minutes(config.PSY_SLOT_3_TIME), config.TIMEZONE).do(psy_job_slot_3)
         # Тижневий дайджест трейдингу (неділя о 18:00)
-        schedule.every().sunday.at("18:00", config.TIMEZONE).do(weekly_digest_job)
+        schedule.every().sunday.at(get_time_minus_minutes("18:00"), config.TIMEZONE).do(weekly_digest_job)
         # Нічна підготовка контенту (авточерга в Google Sheets)
         # Нічна підготовка контенту (роздільні завдання)
         schedule.every().day.at("03:00", config.TIMEZONE).do(daily_queue_job_ai)
