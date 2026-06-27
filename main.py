@@ -203,17 +203,55 @@ def get_subscription_keyboard(unsubscribed, file_key):
         url = f"https://t.me/{channel.replace('@', '')}"
         builder.button(text=f"📌 Підписатися на {name.split('|')[1].strip() if '|' in name else name}", url=url)
     builder.button(text="🔄 Перевірити підписку", callback_data=f"check_{file_key}")
-    builder.button(text="⭐️ Забрати за 1 Зірку (без підписки)", callback_data=f"pay_{file_key}")
+    if not file_key.startswith("ans_"):
+        builder.button(text="⭐️ Забрати за 1 Зірку (без підписки)", callback_data=f"pay_{file_key}")
     builder.adjust(1)
     return builder.as_markup()
 
 async def deliver_file_or_lock(message: Message, file_key: str, is_callback: bool = False):
-    """Перевіряє підписку та копіює потрібне повідомлення/книгу з каналу-бібліотеки @l_ibrar_y"""
+    """Перевіряє підписку та копіює потрібне повідомлення/книгу з каналу-бібліотеки @l_ibrar_y або видає відповідь на квіз"""
     user_chat_id = message.chat.id
     user_id = message.from_user.id
     
     unsubscribed = await check_subscriptions(user_id)
     
+    # Якщо це ключ відповіді на квіз
+    if file_key.startswith("ans_"):
+        if not unsubscribed:
+            # Успішно підписаний! Завантажуємо відповідь
+            if is_callback: await message.edit_text("⏳ Перевірка успішна! Завантажую відповідь на квіз...")
+            else: loading_msg = await message.answer("⏳ Перевірка успішна! Завантажую відповідь на квіз...")
+            
+            ans_content = "❌ <b>Помилка:</b> На жаль, відповідь не знайдена."
+            try:
+                import json
+                answers_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'quiz_answers.json')
+                if os.path.exists(answers_path):
+                    with open(answers_path, 'r', encoding='utf-8') as f:
+                        answers = json.load(f)
+                    ans_content = answers.get(file_key, ans_content)
+            except Exception as e:
+                print(f"Error loading quiz answer: {e}")
+                
+            if is_callback:
+                await message.edit_text(ans_content, parse_mode="HTML")
+            else:
+                if 'loading_msg' in locals():
+                    await loading_msg.delete()
+                await message.answer(ans_content, parse_mode="HTML")
+        else:
+            # Не підписаний
+            lock_text = (
+                "🔒 <b>Доступ до відповіді обмежено!</b>\n\n"
+                "Щоб безкоштовно побачити правильну відповідь на квіз та детальне пояснення, тобі потрібно підписатися на наші корисні канали.\n\n"
+                "Будь ласка, підпишись на канали нижче та натисни кнопку перевірки підписки:"
+            )
+            if is_callback:
+                await message.edit_text(lock_text, reply_markup=get_subscription_keyboard(unsubscribed, file_key), parse_mode="HTML")
+            else:
+                await message.answer(lock_text, reply_markup=get_subscription_keyboard(unsubscribed, file_key), parse_mode="HTML")
+        return
+
     # Витягуємо номер ID повідомлення з ключа
     match = re.search(r'\d+', file_key)
     if not match:
@@ -276,7 +314,9 @@ async def cmd_start(message: Message, command: CommandObject):
             "🤖 @te_shoo_treba (AI)"
         )
         builder = InlineKeyboardBuilder()
+        builder.button(text="📖 Словник трейдера Сім Сорок", url="https://t.me/librar_ian_bot?start=42")
         builder.button(text="🤖 Замовити такого ж бота", url="https://klawaopen-sys.github.io/nova-bots-space/")
+        builder.adjust(1)
         await message.answer(welcome_text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
 @router.message(Command("order_bot", "promo"))

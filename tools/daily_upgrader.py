@@ -31,8 +31,20 @@ formats = [
 ]
 
 def generate_daily_upgrade_text(format_name):
+    extra_prompt = ""
+    if format_name == "Міні-квіз":
+        extra_prompt = (
+            "\n\nКРИТИЧНА ВИМОГА ДЛЯ ФОРМАТУ 'Міні-квіз':\n"
+            "Запиши правильну відповідь та детальне пояснення СТРОГО в самому кінці тексту посту, "
+            "охопивши цей блок спеціальним маркером таким чином:\n"
+            "|||ВІДПОВІДЬ: Тут правильна відповідь та пояснення|||\n"
+            "Приклад:\n"
+            "|||ВІДПОВІДЬ: <b>Правильна відповідь: В) Еквіті.</b> Пояснення: Еквіті відображає...|||\n"
+            "Не пиши нічого іншого про правильну відповідь поза цими маркерами |||ВІДПОВІДЬ: ...|||."
+        )
+        
     prompt = (
-        "Ти — досвідчений фінансовий аналітик, професійний крипто-трейдер та автор освітнього каналу про трейдинг 'Сім сорок'.\n"
+        "Ти — досвідчений фінансовий аналітик, професійний крипто-трейдер та автор освятнього каналу про трейдинг 'Сім сорок'.\n"
         "Твоє завдання — написати цікавий, корисний та лаконічний пост для щоденної освітньої рубрики 'Щоденна прокачка' для трейдерів.\n\n"
         f"Сьогоднішній вибраний формат рубрики: {format_name}\n\n"
         "Опис форматів для розуміння:\n"
@@ -50,7 +62,8 @@ def generate_daily_upgrade_text(format_name):
         f"5. Заголовок посту має починатися з емодзі та назви рубрики: 📈 <b>Щоденна прокачка | {format_name}</b>\n"
         "6. Наприкінці посту ОБОВ'ЯЗКОВО додай коротке та цікаве питання до аудиторії, щоб спонукати їх написати коментар (наприклад: 'А ви використовуєте цей індикатор?', 'Яка ваша найбільша помилка в тільті?', тощо).\n"
         "7. КРИТИЧНО: Заборонено давати прямі фінансові чи інвестиційні поради або прогнози конкретних цін активів.\n"
-        "8. Додай тематичні хештеги в кінці: #ЩоденнаПрокачка #Трейдинг #Навчання\n\n"
+        "8. Додай тематичні хештеги в кінці: #ЩоденнаПрокачка #Трейдинг #Навчання"
+        f"{extra_prompt}\n\n"
         "Напиши тільки сам текст поста з HTML-тегами, без вступних фраз чи лапок."
     )
     
@@ -87,6 +100,49 @@ async def post_daily_upgrade():
         if not post_text:
             print("Failed to generate post text. Aborting.")
             return
+            
+        # Якщо це квіз, шукаємо правильну відповідь
+        if format_name == "Міні-квіз":
+            match = re.search(r'\|\|\|ВІДПОВІДЬ:\s*(.*?)\|\|\|', post_text, re.DOTALL)
+            if match:
+                raw_answer = match.group(1).strip()
+                import uuid
+                import json
+                ans_id = uuid.uuid4().hex[:8]
+                ans_key = f"ans_{ans_id}"
+                
+                # Зберігаємо відповідь у json
+                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                data_dir = os.path.join(project_root, 'data')
+                os.makedirs(data_dir, exist_ok=True)
+                answers_path = os.path.join(data_dir, 'quiz_answers.json')
+                
+                answers = {}
+                if os.path.exists(answers_path):
+                    try:
+                        with open(answers_path, 'r', encoding='utf-8') as f:
+                            answers = json.load(f)
+                    except Exception:
+                        pass
+                
+                answers[ans_key] = (
+                    f"🏆 <b>Правильна відповідь на квіз:</b>\n\n"
+                    f"{raw_answer}\n\n"
+                    f"<i>📈 Сім сорок | Трейдинг & AI</i>"
+                )
+                
+                with open(answers_path, 'w', encoding='utf-8') as f:
+                    json.dump(answers, f, ensure_ascii=False, indent=2)
+                
+                # Замінюємо маркер у тексті посту на посилання до бота
+                bot_username = "librar_ian_bot"
+                sub_gate_link = f"https://t.me/{bot_username}?start={ans_key}"
+                replacement_text = (
+                    f"💡 <b>Правильна відповідь:</b> 🔒 <a href=\"{sub_gate_link}\">Показати відповідь (тільки для підписників)</a>"
+                )
+                post_text = re.sub(r'\|\|\|ВІДПОВІДЬ:.*?\|\|\|', replacement_text, post_text, flags=re.DOTALL)
+            else:
+                print("Warning: Marker '|||ВІДПОВІДЬ: ...|||' not found in Gemini response!")
             
         if len(post_text) > 1024:
             post_text = post_text[:1020] + "..."
