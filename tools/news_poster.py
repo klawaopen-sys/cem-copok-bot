@@ -136,6 +136,39 @@ def select_and_rewrite_news_with_gemini(news_items):
         print(f"Помилка генерації новин трейдингу через Gemini: {e}")
     return None, None
 
+def fetch_channel_history_web(channel_username: str) -> list:
+    """
+    Зчитує чистий текст останніх 15 постів з публічної веб-версії каналу Telegram.
+    Дозволяє проводити дублікат-контроль без потреби в сесії юзербота.
+    """
+    import urllib.request
+    import html
+    import re
+    username = channel_username.lstrip('@')
+    url = f"https://t.me/s/{username}"
+    try:
+        req = urllib.request.Request(
+            url, 
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        )
+        with urllib.request.urlopen(req, timeout=15) as response:
+            html_content = response.read().decode('utf-8')
+            
+        posts = []
+        pattern = re.compile(r'<div class="tgme_widget_message_text[^>]*>(.*?)</div>', re.DOTALL)
+        matches = pattern.findall(html_content)
+        
+        # Беремо останні 15 повідомлень
+        for match in matches[-15:]:
+            clean_text = re.sub(r'<[^>]+>', '', match).strip()
+            clean_text = html.unescape(clean_text)
+            if clean_text:
+                posts.append(clean_text)
+        return posts
+    except Exception as e:
+        print(f"[fallback_scraper] Помилка зчитування веб-історії каналу {channel_username}: {e}")
+        return []
+
 async def get_my_last_posts(client, channel_name, limit=15):
     """Зчитує останні limit повідомлень з власного каналу. Стійка до AuthKeyDuplicatedError."""
     # Збільшуємо ліміт мінімум до 15, щоб уникнути повторів недавніх новин
@@ -152,8 +185,15 @@ async def get_my_last_posts(client, channel_name, limit=15):
         print(f"✅ Успішно зчитано {len(posts)} останніх постів.")
     except Exception as e:
         print(f"⚠️ Не вдалося зчитати історію каналу через Telethon: {e}")
-        print("🔄 Перемикаюсь в режим симуляції (порожня історія).")
+        print("🔄 Спроба зчитати історію через веб-скрейпер...")
+        web_posts = fetch_channel_history_web(channel_name)
+        if web_posts:
+            posts = web_posts
+            print(f"✅ Успішно зчитано {len(posts)} останніх постів через веб-скрейпер!")
+        else:
+            print("🔄 Перемикаюсь в режим симуляції (порожня історія).")
     return posts
+
 
 def select_and_compile_with_gemini(news_list, my_last_posts, category_name, channel_type, prefer_groq=False):
     """Вибирає тренд з RSS, перевіряє на дублікати та комбінує пост з 3+ джерел"""
