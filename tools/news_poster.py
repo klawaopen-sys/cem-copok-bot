@@ -169,30 +169,133 @@ def fetch_channel_history_web(channel_username: str) -> list:
         print(f"[fallback_scraper] Помилка зчитування веб-історії каналу {channel_username}: {e}")
         return []
 
+def get_channel_type_by_name(channel_name):
+    channel_str = str(channel_name).strip().lower()
+    channel_clean = channel_str.lstrip('@')
+    
+    # Match against usernames in config
+    ai_clean = config.AI_TARGET_CHANNEL.lstrip('@').lower()
+    psy_clean = config.PSY_TARGET_CHANNEL.lstrip('@').lower()
+    trading_clean = config.TARGET_CHANNEL.lstrip('@').lower()
+    
+    if channel_clean == ai_clean:
+        return 'ai'
+    elif channel_clean == psy_clean:
+        return 'psy'
+    elif channel_clean == trading_clean:
+        return 'trading'
+    else:
+        # Fallback if channel name doesn't match config target channels
+        if 'te_shoo' in channel_clean:
+            return 'ai'
+        elif 'ncux' in channel_clean:
+            return 'psy'
+        else:
+            return 'trading'
+
+def get_last_posts_from_sheet(channel_type, limit=20):
+    try:
+        ws = get_posts_queue_worksheet()
+        data = ws.get_all_values()
+        posts = []
+        if len(data) > 1:
+            for row in reversed(data[1:]):
+                if len(row) > 5 and row[1] == channel_type:
+                    text = row[3]
+                    if text:
+                        posts.append(text.strip())
+                    if len(posts) >= limit:
+                        break
+        return posts
+    except Exception as e:
+        print(f"⚠️ Error reading history from Google Sheets: {e}")
+        return []
+
+def log_post_to_sheet(channel_type, category, post_text, status="published", post_link=""):
+    try:
+        ws = get_posts_queue_worksheet()
+        data = ws.get_all_values()
+        next_id = 1
+        if len(data) > 1:
+            try:
+                ids = [int(row[0]) for row in data[1:] if row[0].isdigit()]
+                if ids:
+                    next_id = max(ids) + 1
+            except Exception:
+                next_id = len(data)
+        
+        now_str = datetime.now(pytz.timezone('Europe/Kyiv')).strftime('%Y-%m-%d %H:%M:%S')
+        row = [str(next_id), channel_type, category, post_text, "", status, now_str, now_str if status == "published" else "", post_link]
+        ws.append_row(row)
+        print(f"💾 Logged post to sheet: ID {next_id} for channel {channel_type}")
+    except Exception as e:
+        print(f"⚠️ Failed to log post to sheet: {e}")
+
 async def get_my_last_posts(client, channel_name, limit=15):
-    """Зчитує останні limit повідомлень з власного каналу. Стійка до AuthKeyDuplicatedError."""
-    # Збільшуємо ліміт мінімум до 15, щоб уникнути повторів недавніх новин
-    limit = max(limit, 15)
+    """Зчитує останні limit повідомлень з власного каналу та Google Таблиць. Стійка до AuthKeyDuplicatedError."""
+    # Збільшуємо ліміт мінімум до 25, щоб уникнути повторів недавніх новин
+    limit = max(limit, 25)
     posts = []
     print(f"📖 Зчитую історію власного каналу {channel_name} (ліміт: {limit})...")
-    try:
-        if not client.is_connected():
-            await client.connect()
-        async for message in client.iter_messages(channel_name, limit=limit):
-            text = message.text or message.message
-            if text:
-                posts.append(text.strip())
-        print(f"✅ Успішно зчитано {len(posts)} останніх постів.")
-    except Exception as e:
-        print(f"⚠️ Не вдалося зчитати історію каналу через Telethon: {e}")
-        print("🔄 Спроба зчитати історію через веб-скрейпер...")
+    
+    # 1. Спроба зчитати з Telegram через Telethon
+    tg_posts = []
+    if client:
+        try:
+            if not client.is_connected():
+                await client.connect()
+            async for message in client.iter_messages(channel_name, limit=limit):
+                text = message.text or message.message
+                if text:
+                    tg_posts.append(text.strip())
+            print(f"✅ Успішно зчитано {len(tg_posts)} останніх постів з Telegram через Telethon.")
+        except Exception as e:
+            print(f"⚠️ Не вдалося зчитати історію каналу через Telethon: {e}")
+            print("🔄 Спроба зчитати історію через веб-скрейпер...")
+            web_posts = fetch_channel_history_web(channel_name)
+            if web_posts:
+                tg_posts = web_posts
+                print(f"✅ Успішно зчитано {len(tg_posts)} останніх постів через веб-скрейпер!")
+    else:
+        print("🔄 Client не надано. Спроба зчитати історію через веб-скрейпер...")
         web_posts = fetch_channel_history_web(channel_name)
         if web_posts:
-            posts = web_posts
-            print(f"✅ Успішно зчитано {len(posts)} останніх постів через веб-скрейпер!")
-        else:
-            print("🔄 Перемикаюсь в режим симуляції (порожня історія).")
-    return posts
+            tg_posts = web_posts
+            print(f"✅ Успішно зчитано {len(tg_posts)} останніх постів через веб-скрейпер!")
+
+    # 2. Спроба зчитати з Google Sheets
+    sheet_posts = []
+    try:
+        channel_type = get_channel_type_by_name(channel_name)
+        sheet_posts = get_last_posts_from_sheet(channel_type, limit=limit)
+        print(f"✅ Успішно зчитано {len(sheet_posts)} останніх постів з Google Sheets для '{channel_type}'.")
+    except Exception as se:
+        print(f"⚠️ Не вдалося зчитати історію з Google Sheets: {se}")
+
+    # 3. Об'єднуємо обидва джерела унікально
+    combined = []
+    seen = set()
+    
+    # Нормалізація для надійного порівняння дублікатів
+    def normalize(t):
+        t_clean = re.sub(r'<[^>]+>', '', t)  # Видаляємо HTML-теги
+        t_clean = re.sub(r'\s+', '', t_clean) # Видаляємо всі пробіли
+        return t_clean.lower()
+        
+    for p in tg_posts:
+        norm = normalize(p)
+        if norm and norm not in seen:
+            seen.add(norm)
+            combined.append(p)
+            
+    for p in sheet_posts:
+        norm = normalize(p)
+        if norm and norm not in seen:
+            seen.add(norm)
+            combined.append(p)
+            
+    print(f"📊 Разом сформовано {len(combined)} унікальних постів в історії для перевірки дублікатів.")
+    return combined[:limit]
 
 
 def select_and_compile_with_gemini(news_list, my_last_posts, category_name, channel_type, prefer_groq=False):
@@ -1084,9 +1187,10 @@ async def post_news_report(client):
         # Публікація
         try:
             await sleep_until_time("14:00")
+            msg = None
             if photo_path and os.path.exists(photo_path):
                 caption_text, parse_mode = limit_caption_text(post_text, 1024)
-                await bot.send_photo(
+                msg = await bot.send_photo(
                     chat_id=config.TARGET_CHANNEL,
                     photo=FSInputFile(photo_path),
                     caption=caption_text,
@@ -1096,7 +1200,10 @@ async def post_news_report(client):
                 try: os.remove(photo_path)
                 except Exception: pass
             else:
-                await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML', reply_markup=reply_markup)
+                msg = await bot.send_message(chat_id=config.TARGET_CHANNEL, text=post_text, parse_mode='HTML', reply_markup=reply_markup)
+            
+            post_link = f"https://t.me/{config.TARGET_CHANNEL.replace('@', '')}/{msg.message_id}" if msg else ""
+            log_post_to_sheet('trading', 'Trading News', post_text, 'published', post_link)
             print("✅ Денний огляд новин трейдингу опубліковано!")
         except Exception as e:
             print(f"❌ Помилка надсилання в Telegram: {e}")
@@ -1304,6 +1411,9 @@ async def post_ai_category_update(client, category_name):
                 )
                 
             print(f"✅ ШІ-пост '{category_name}' успішно опубліковано!")
+            channel_username = config.AI_TARGET_CHANNEL.replace('@', '')
+            post_link = f"https://t.me/{channel_username}/{msg.id}" if msg else ""
+            log_post_to_sheet('ai', category_name, final_post_text, 'published', post_link)
 
             # Якщо коментарі є і знайдено промпт, публікуємо його у коментарях
             if msg and extracted_prompt and has_linked_chat:
@@ -1448,9 +1558,10 @@ async def post_weekly_digest(client):
                 
         # Публікація в канал
         await sleep_until_time("18:00")
+        msg = None
         if photo_path and os.path.exists(photo_path):
             caption_text, parse_mode = limit_caption_text(digest_text, 1024)
-            await bot.send_photo(
+            msg = await bot.send_photo(
                 chat_id=config.TARGET_CHANNEL,
                 photo=FSInputFile(photo_path),
                 caption=caption_text,
@@ -1460,8 +1571,10 @@ async def post_weekly_digest(client):
             try: os.remove(photo_path)
             except Exception: pass
         else:
-            await bot.send_message(chat_id=config.TARGET_CHANNEL, text=digest_text, parse_mode='HTML', reply_markup=reply_markup)
+            msg = await bot.send_message(chat_id=config.TARGET_CHANNEL, text=digest_text, parse_mode='HTML', reply_markup=reply_markup)
             
+        post_link = f"https://t.me/{config.TARGET_CHANNEL.replace('@', '')}/{msg.message_id}" if msg else ""
+        log_post_to_sheet('trading', 'Weekly Digest', digest_text, 'published', post_link)
         print("✅ Щотижневий фінансовий дайджест успішно опубліковано!")
     except Exception as e:
         print(f"❌ Помилка в процесі публікації щотижневого дайджесту: {e}")
@@ -1710,6 +1823,7 @@ async def post_psy_category_update(client, category_name):
 
         # Публікуємо в канал через Telethon (від імені користувача Клава!)
         print(f"📤 Надсилаю психологічний пост '{category_name}' в канал {config.PSY_TARGET_CHANNEL}...")
+        msg = None
         try:
             if not client.is_connected():
                 await client.connect()
@@ -1717,7 +1831,7 @@ async def post_psy_category_update(client, category_name):
                 await sleep_until_time(target_time)
             if photo_path and os.path.exists(photo_path):
                 is_default = (photo_path.endswith("psy_default.png"))
-                await client.send_message(
+                msg = await client.send_message(
                     entity=config.PSY_TARGET_CHANNEL,
                     message=final_post_text,
                     file=photo_path,
@@ -1731,7 +1845,7 @@ async def post_psy_category_update(client, category_name):
                     try: os.remove(photo_path)
                     except Exception: pass
             else:
-                await client.send_message(
+                msg = await client.send_message(
                     entity=config.PSY_TARGET_CHANNEL,
                     message=final_post_text,
                     parse_mode='html',
@@ -1740,6 +1854,10 @@ async def post_psy_category_update(client, category_name):
                         Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
                     ]]
                 )
+            
+            channel_username = config.PSY_TARGET_CHANNEL.replace('@', '')
+            post_link = f"https://t.me/{channel_username}/{msg.id}" if msg else ""
+            log_post_to_sheet('psy', category_name, final_post_text, 'published', post_link)
             print(f"✅ Психологічний пост '{category_name}' успешно опубліковано!")
         except Exception as e:
             print(f"❌ Помилка надсилання в Telegram (можливо AuthKeyDuplicatedError): {e}")
