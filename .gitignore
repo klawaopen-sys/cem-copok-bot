@@ -15,3 +15,4 @@ test_download.py
 !.tmp/focus_default.jpg
 !.tmp/daily_upgrade.jpg
 !.tmp/trader_dictionary.jpg
+media_queue/
