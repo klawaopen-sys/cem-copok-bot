@@ -310,7 +310,7 @@ def select_and_compile_with_gemini(news_list, my_last_posts, category_name, chan
 
     my_last_posts_text = ""
     for idx, post in enumerate(my_last_posts):
-        my_last_posts_text += f"\n--- НАШ МИНУЛИЙ ПОСТ #{idx} ---\n{post[:200]}...\n"
+        my_last_posts_text += f"\n--- НАШ МИНУЛИЙ ПОСТ #{idx} ---\n{post[:1000]}\n"
 
     news_pool_text = ""
     for idx, item in enumerate(news_list):
@@ -366,8 +366,7 @@ def select_and_compile_with_gemini(news_list, my_last_posts, category_name, chan
         "<текст поста>\n"
         "IMAGE_PROMPT:\n"
         "<опис сцени для генератора зображень англійською мовою без тексту та логотипів>\n\n"
-        "Якщо жодної унікальної теми не знайдено, поверни:\n"
-        "RESPONSE_STATUS: NO_UNIQUE_NEWS"
+        "Якщо в пулі новин немає придатних або унікальних тем для цієї категорії, ти ЗОБОВ'ЯЗАНИЙ самостійно згенерувати корисний пост-пораду, лайфхак, готові промпти або інструкцію для роботи з популярними інструментами на тему цієї категорії (наприклад, для продуктивності — корисні промпти для ChatGPT/Claude, розширення або методи автоматизації рутини; для медіа — прийоми та промпти генерації зображень; для новин — цікавий аналітичний огляд або історичний факт про технології) та повернути її зі статусом RESPONSE_STATUS: UNIQUE. Повернення статусу NO_UNIQUE_NEWS заборонено — завжди створюй корисний пост для нашої аудиторії."
     )
 
     try:

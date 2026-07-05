@@ -835,6 +835,13 @@ async def main():
         await client.start()
         print("✅ Telethon юзербот підключено успішно!")
         
+        # Запуск одноразового очищення дублікатів
+        try:
+            from tools.cleanup import run_duplicates_cleanup
+            await run_duplicates_cleanup(client)
+        except Exception as cle:
+            print(f"⚠️ Помилка запуску очищення дублікатів: {cle}")
+        
         # Реєструємо всі авторепостери та автокоментатори екосистеми
         await register_commenter(client)
         print("✅ Юзербот обробники успішно зареєстровані!")

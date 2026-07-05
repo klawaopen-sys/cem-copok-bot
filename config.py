@@ -62,7 +62,11 @@ TRADING_REPORTER_RSS_URLS = [
 AI_REPORTER_RSS_URLS = [
     "https://techcrunch.com/category/artificial-intelligence/feed/",
     "https://venturebeat.com/category/ai/feed/",
-    "https://itc.ua/feed/"
+    "https://itc.ua/feed/",
+    "https://ain.ua/feed/",
+    "https://gagadget.com/uk/rss/",
+    "https://www.zdnet.com/topic/artificial-intelligence/rss.xml",
+    "https://theverge.com/rss/index.xml"
 ]
 
 PSY_REPORTER_RSS_URLS = [
