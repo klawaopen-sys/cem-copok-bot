@@ -25,6 +25,11 @@ PSY_BOT_TOKEN = '6557362587:AAHmNbPuhKI9swW96m7ou4B-4fBhcuzVbdI' # Бот-пси
 GROQ_API_KEY = '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' # Ключ для Groq (Whisper)
 GROQ_MODEL = 'whisper-large-v3-turbo' # Модель транскрибації
 
+# Налаштування OmniRouter
+import os
+OMNIROUTER_BASE_URL = os.getenv("OMNIROUTER_BASE_URL", "http://localhost:20128/v1")
+OMNIROUTER_API_KEY = os.getenv("OMNIROUTER_API_KEY")
+
 # ---------------------------------------------------------------------
 # 4. Проект "СІМ СОРОК" (Трейдинг & Фінанси)
 # ---------------------------------------------------------------------

@@ -57,6 +57,70 @@ async def edit_rich_message_http(bot_token: str, chat_id: int, message_id: int, 
             return await resp.json()
 
 async def get_gemini_streaming_reply(api_key: str, history: list, system_prompt: str, chat_id: int, bot_token: str, reply_markup: dict = None) -> str:
+    import config
+    omni_key = getattr(config, 'OMNIROUTER_API_KEY', None)
+    if omni_key:
+        omni_url = getattr(config, 'OMNIROUTER_BASE_URL', 'http://localhost:20128/v1')
+        url = f"{omni_url.rstrip('/')}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {omni_key}",
+            "Content-Type": "application/json"
+        }
+        
+        from tools.gemini_client import translate_gemini_to_openai
+        gemini_payload = {
+            "contents": history,
+            "systemInstruction": {
+                "parts": [{"text": system_prompt}]
+            }
+        }
+        messages = translate_gemini_to_openai(gemini_payload)
+        
+        payload = {
+            "model": "auto/chat",
+            "messages": messages,
+            "stream": True
+        }
+        
+        draft_id = chat_id
+        await send_rich_message_draft_http(bot_token, chat_id, draft_id, "<tg-thinking>Аналізую ваші слова...</tg-thinking>")
+        
+        accumulated_text = ""
+        last_update_time = time.time()
+        
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(url, json=payload, headers=headers) as resp:
+                    if resp.status == 200:
+                        async for line in resp.content:
+                            line_str = line.decode('utf-8').strip()
+                            if line_str.startswith("data:"):
+                                if "[DONE]" in line_str:
+                                    break
+                                json_str = line_str[5:].strip()
+                                try:
+                                    data = json.loads(json_str)
+                                    part_text = data['choices'][0]['delta'].get('content', '')
+                                    accumulated_text += part_text
+                                    now = time.time()
+                                    if now - last_update_time > 1.2:
+                                        formatted_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
+                                        await send_rich_message_draft_http(bot_token, chat_id, draft_id, formatted_html)
+                                        last_update_time = now
+                                except Exception:
+                                    pass
+                    else:
+                        print(f"❌ [Main Stream] OmniRouter stream failed with status {resp.status}")
+            except Exception as e:
+                print(f"❌ [Main Stream] Exception during OmniRouter stream: {e}")
+                
+        if accumulated_text.strip():
+            final_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
+            await send_rich_message_http(bot_token, chat_id, final_html, reply_markup)
+            return accumulated_text.strip()
+            
+        print("⚠️ [Main Stream] OmniRouter stream yielded empty text. Falling back to Gemini stream...")
+
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key={api_key}&alt=sse"
     payload = {
         "contents": history,

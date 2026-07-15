@@ -101,6 +101,52 @@ def _attempt_groq_fallback(json_payload):
         print(f"❌ [Gemini Client] Exception during Groq request: {e}")
     return None
 
+def _attempt_omnirouter_request(json_payload):
+    import config
+    try:
+        omni_key = getattr(config, 'OMNIROUTER_API_KEY', None)
+        omni_url = getattr(config, 'OMNIROUTER_BASE_URL', 'http://localhost:20128/v1')
+        if omni_key:
+            url = f"{omni_url.rstrip('/')}/chat/completions"
+            headers = {
+                'Authorization': f'Bearer {omni_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            messages = translate_gemini_to_openai(json_payload)
+            payload = {
+                'model': 'auto/chat',
+                'messages': messages,
+                'stream': False
+            }
+            
+            print(f"🔌 [Gemini Client] Attempting OmniRouter request: {url}...")
+            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            
+            if resp.status_code == 200:
+                ai_text = resp.json()['choices'][0]['message']['content'].strip()
+                print("✅ [Gemini Client] OmniRouter request successful!")
+                
+                gemini_compatible_json = {
+                    "candidates": [
+                        {
+                            "content": {
+                                "parts": [
+                                    {
+                                        "text": ai_text
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+                return MockResponse(gemini_compatible_json, 200)
+            else:
+                print(f"❌ [Gemini Client] OmniRouter request failed with code {resp.status_code}: {resp.text}")
+    except Exception as e:
+        print(f"❌ [Gemini Client] Exception during OmniRouter request: {e}")
+    return None
+
 def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries=3, initial_backoff=2, prefer_groq=False):
     """
     Performs a requests.post call to the Gemini API with exponential backoff retries.
@@ -110,6 +156,15 @@ def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries=3, in
     """
     import config
     
+    # Спершу пробуємо OmniRouter, якщо ключ налаштований
+    omni_key = getattr(config, 'OMNIROUTER_API_KEY', None)
+    if omni_key:
+        print("🌟 [Gemini Client] OmniRouter key configured. Trying OmniRouter first...")
+        omni_res = _attempt_omnirouter_request(json_payload)
+        if omni_res is not None and omni_res.status_code == 200:
+            return omni_res
+        print("⚠️ [Gemini Client] OmniRouter failed. Falling back to original Gemini/Groq cascade...")
+        
     if prefer_groq:
         print("🌟 [Gemini Client] prefer_groq=True specified. Trying Groq first...")
         groq_res = _attempt_groq_fallback(json_payload)
