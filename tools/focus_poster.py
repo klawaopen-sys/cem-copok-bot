@@ -34,7 +34,7 @@ async def fetch_all_sources(client):
         
     return "\n\n---\n\n".join(combined_texts)
 
-def generate_focus_text(sources_text):
+async def generate_focus_text(sources_text):
     if not sources_text.strip():
         return "NO_DATA"
         
@@ -72,11 +72,12 @@ def generate_focus_text(sources_text):
     }
     
     try:
-        r = gemini_post_with_retry(url, headers, payload, timeout=30)
-        if r.status_code == 200:
-            return r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        r = await gemini_post_with_retry(url, headers, payload, timeout=30)
+        if r is not None and r.status_code == 200:
+            resp_json = await r.json()
+            return resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
         else:
-            print(f"Gemini Focus API error: {r.status_code} - {r.text}")
+            print(f"Gemini Focus API error: {r.status_code if r else 'None'} - {r.text if r else 'None'}")
     except Exception as e:
         print(f"Exception during focus generation: {e}")
     return "NO_DATA"
@@ -85,7 +86,7 @@ async def post_focus_day(client):
     print("🚀 Початок процесу публікації 'Фокус дня'...")
     sources_text = await fetch_all_sources(client)
     
-    post_text = generate_focus_text(sources_text)
+    post_text = await generate_focus_text(sources_text)
     if not post_text or "NO_DATA" in post_text or post_text.strip() == "NO_DATA":
         print("ℹ️ Немає підтверджених рівнів або аналітики у джерелах. Запускаємо генерацію фолбеку через CoinMarketCap...")
         try:
@@ -117,9 +118,10 @@ async def post_focus_day(client):
             
             scenario = "На ринку спостерігається консолідація в очікуванні подальших макроекономічних тригерів. Рекомендується дотримуватись ризик-менеджменту."
             try:
-                r = gemini_post_with_retry(url, headers, payload, timeout=25)
-                if r.status_code == 200:
-                    scenario = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+                r = await gemini_post_with_retry(url, headers, payload, timeout=25)
+                if r is not None and r.status_code == 200:
+                    resp_json = await r.json()
+                    scenario = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
                     scenario = scenario.strip('"`\'')
             except Exception as e:
                 print(f"Exception during fallback scenario generation: {e}")

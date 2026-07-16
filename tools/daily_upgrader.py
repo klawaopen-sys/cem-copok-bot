@@ -30,7 +30,7 @@ formats = [
     "Практична порада"
 ]
 
-def generate_daily_upgrade_text(format_name):
+async def generate_daily_upgrade_text(format_name):
     extra_prompt = ""
     if format_name == "Міні-квіз":
         extra_prompt = (
@@ -78,14 +78,14 @@ def generate_daily_upgrade_text(format_name):
     }
     
     try:
-        r = gemini_post_with_retry(url, headers, payload, timeout=20, prefer_groq=True)
-        if r.status_code == 200:
-            data = r.json()
+        r = await gemini_post_with_retry(url, headers, payload, timeout=20, prefer_groq=True)
+        if r is not None and r.status_code == 200:
+            data = await r.json()
             post_text = data['candidates'][0]['content']['parts'][0]['text'].strip()
             post_text = post_text.strip('"`\'')
             return post_text
         else:
-            print(f"Error calling Gemini: {r.status_code} - {r.text}")
+            print(f"Error calling Gemini: {r.status_code if r else 'None'} - {r.text if r else 'None'}")
     except Exception as e:
         print(f"Exception calling Gemini: {e}")
     return None
@@ -95,7 +95,7 @@ async def post_daily_upgrade():
     try:
         format_name = random.choice(formats)
         print(f"Generating post for format: {format_name}...")
-        post_text = generate_daily_upgrade_text(format_name)
+        post_text = await generate_daily_upgrade_text(format_name)
         
         if not post_text:
             print("Failed to generate post text. Aborting.")

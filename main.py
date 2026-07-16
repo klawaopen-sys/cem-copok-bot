@@ -15,6 +15,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 
 async def send_rich_message_http(bot_token: str, chat_id: int, html_content: str, reply_markup: dict = None) -> dict:
+    import config
     url = f"https://api.telegram.org/bot{bot_token}/sendRichMessage"
     payload = {
         "chat_id": chat_id,
@@ -24,11 +25,12 @@ async def send_rich_message_http(bot_token: str, chat_id: int, html_content: str
     }
     if reply_markup:
         payload["reply_markup"] = reply_markup
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=payload) as resp:
-            return await resp.json()
+    session = await config.get_session()
+    async with session.post(url, json=payload) as resp:
+        return await resp.json()
 
 async def send_rich_message_draft_http(bot_token: str, chat_id: int, draft_id: int, html_content: str) -> dict:
+    import config
     url = f"https://api.telegram.org/bot{bot_token}/sendRichMessageDraft"
     payload = {
         "chat_id": chat_id,
@@ -37,11 +39,12 @@ async def send_rich_message_draft_http(bot_token: str, chat_id: int, draft_id: i
             "html": html_content
         }
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=payload) as resp:
-            return await resp.json()
+    session = await config.get_session()
+    async with session.post(url, json=payload) as resp:
+        return await resp.json()
 
 async def edit_rich_message_http(bot_token: str, chat_id: int, message_id: int, html_content: str, reply_markup: dict = None) -> dict:
+    import config
     url = f"https://api.telegram.org/bot{bot_token}/editMessageText"
     payload = {
         "chat_id": chat_id,
@@ -52,13 +55,14 @@ async def edit_rich_message_http(bot_token: str, chat_id: int, message_id: int, 
     }
     if reply_markup:
         payload["reply_markup"] = reply_markup
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=payload) as resp:
-            return await resp.json()
+    session = await config.get_session()
+    async with session.post(url, json=payload) as resp:
+        return await resp.json()
 
 async def get_gemini_streaming_reply(api_key: str, history: list, system_prompt: str, chat_id: int, bot_token: str, reply_markup: dict = None) -> str:
     import config
     omni_key = getattr(config, 'OMNIROUTER_API_KEY', None)
+    session = await config.get_session()
     if omni_key:
         omni_url = getattr(config, 'OMNIROUTER_BASE_URL', 'http://localhost:20128/v1')
         url = f"{omni_url.rstrip('/')}/chat/completions"
@@ -88,31 +92,30 @@ async def get_gemini_streaming_reply(api_key: str, history: list, system_prompt:
         accumulated_text = ""
         last_update_time = time.time()
         
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(url, json=payload, headers=headers) as resp:
-                    if resp.status == 200:
-                        async for line in resp.content:
-                            line_str = line.decode('utf-8').strip()
-                            if line_str.startswith("data:"):
-                                if "[DONE]" in line_str:
-                                    break
-                                json_str = line_str[5:].strip()
-                                try:
-                                    data = json.loads(json_str)
-                                    part_text = data['choices'][0]['delta'].get('content', '')
-                                    accumulated_text += part_text
-                                    now = time.time()
-                                    if now - last_update_time > 1.2:
-                                        formatted_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
-                                        await send_rich_message_draft_http(bot_token, chat_id, draft_id, formatted_html)
-                                        last_update_time = now
-                                except Exception:
-                                    pass
-                    else:
-                        print(f"❌ [Main Stream] OmniRouter stream failed with status {resp.status}")
-            except Exception as e:
-                print(f"❌ [Main Stream] Exception during OmniRouter stream: {e}")
+        try:
+            async with session.post(url, json=payload, headers=headers) as resp:
+                if resp.status == 200:
+                    async for line in resp.content:
+                        line_str = line.decode('utf-8').strip()
+                        if line_str.startswith("data:"):
+                            if "[DONE]" in line_str:
+                                break
+                            json_str = line_str[5:].strip()
+                            try:
+                                data = json.loads(json_str)
+                                part_text = data['choices'][0]['delta'].get('content', '')
+                                accumulated_text += part_text
+                                now = time.time()
+                                if now - last_update_time > 1.2:
+                                    formatted_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
+                                    await send_rich_message_draft_http(bot_token, chat_id, draft_id, formatted_html)
+                                    last_update_time = now
+                            except Exception:
+                                pass
+                else:
+                    print(f"❌ [Main Stream] OmniRouter stream failed with status {resp.status}")
+        except Exception as e:
+            print(f"❌ [Main Stream] Exception during OmniRouter stream: {e}")
                 
         if accumulated_text.strip():
             final_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
@@ -135,47 +138,46 @@ async def get_gemini_streaming_reply(api_key: str, history: list, system_prompt:
     last_update_time = time.time()
     headers = {"Content-Type": "application/json"}
     
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.post(url, json=payload, headers=headers) as resp:
-                if resp.status == 200:
-                    async for line in resp.content:
-                        line_str = line.decode('utf-8').strip()
-                        if line_str.startswith("data:"):
-                            json_str = line_str[5:].strip()
-                            try:
-                                data = json.loads(json_str)
-                                part_text = data['candidates'][0]['content']['parts'][0]['text']
-                                accumulated_text += part_text
-                                now = time.time()
-                                if now - last_update_time > 1.2:
-                                    formatted_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
-                                    await send_rich_message_draft_http(bot_token, chat_id, draft_id, formatted_html)
-                                    last_update_time = now
-                            except Exception:
-                                pass
-                else:
-                    fallback_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?key={api_key}&alt=sse"
-                    async with session.post(fallback_url, json=payload, headers=headers) as fallback_resp:
-                        if fallback_resp.status == 200:
-                            async for line in fallback_resp.content:
-                                line_str = line.decode('utf-8').strip()
-                                if line_str.startswith("data:"):
-                                    json_str = line_str[5:].strip()
-                                    try:
-                                        data = json.loads(json_str)
-                                        part_text = data['candidates'][0]['content']['parts'][0]['text']
-                                        accumulated_text += part_text
-                                        now = time.time()
-                                        if now - last_update_time > 1.2:
-                                            formatted_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
-                                            await send_rich_message_draft_http(bot_token, chat_id, draft_id, formatted_html)
-                                            last_update_time = now
-                                    except Exception:
-                                        pass
-        except Exception as e:
-            print(f"Streaming error: {e}")
-            
+    try:
+        async with session.post(url, json=payload, headers=headers) as resp:
+            if resp.status == 200:
+                async for line in resp.content:
+                    line_str = line.decode('utf-8').strip()
+                    if line_str.startswith("data:"):
+                        json_str = line_str[5:].strip()
+                        try:
+                            data = json.loads(json_str)
+                            part_text = data['candidates'][0]['content']['parts'][0]['text']
+                            accumulated_text += part_text
+                            now = time.time()
+                            if now - last_update_time > 1.2:
+                                formatted_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
+                                await send_rich_message_draft_http(bot_token, chat_id, draft_id, formatted_html)
+                                last_update_time = now
+                        except Exception:
+                            pass
+            else:
+                fallback_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?key={api_key}&alt=sse"
+                async with session.post(fallback_url, json=payload, headers=headers) as fallback_resp:
+                    if fallback_resp.status == 200:
+                        async for line in fallback_resp.content:
+                            line_str = line.decode('utf-8').strip()
+                            if line_str.startswith("data:"):
+                                json_str = line_str[5:].strip()
+                                try:
+                                    data = json.loads(json_str)
+                                    part_text = data['candidates'][0]['content']['parts'][0]['text']
+                                    accumulated_text += part_text
+                                    now = time.time()
+                                    if now - last_update_time > 1.2:
+                                        formatted_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
+                                        await send_rich_message_draft_http(bot_token, chat_id, draft_id, formatted_html)
+                                        last_update_time = now
+                                except Exception:
+                                    pass
+    except Exception as e:
+        print(f"Streaming error: {e}")
+        
     if accumulated_text.strip():
         final_html = accumulated_text.replace("**", "<b>").replace("* ", "• ").replace("\n", "<br/>")
         await send_rich_message_http(bot_token, chat_id, final_html, reply_markup)
@@ -1002,6 +1004,7 @@ async def main():
         # Тримаємо програму відкритою і слухаємо Telethon
         await client.run_until_disconnected()
     finally:
+        await config.close_session()
         lock.release()
 
 if __name__ == "__main__":

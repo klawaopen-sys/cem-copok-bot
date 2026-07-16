@@ -16,3 +16,4 @@ test_download.py
 !.tmp/daily_upgrade.jpg
 !.tmp/trader_dictionary.jpg
 media_queue/
+.env

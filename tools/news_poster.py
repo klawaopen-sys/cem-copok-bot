@@ -78,7 +78,7 @@ async def get_latest_news_texts(client, limit=3):
             print(f"⚠️ Не вдалося зчитати канал {channel_name}: {e}")
     return news_list
 
-def select_and_rewrite_news_with_gemini(news_items):
+async def select_and_rewrite_news_with_gemini(news_items):
     """Вибирає найкращу новину трейдингу через Gemini та робить рерайт"""
     if not config.GEMINI_API_KEY:
         return None, None
@@ -112,9 +112,10 @@ def select_and_rewrite_news_with_gemini(news_items):
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
-        r = gemini_post_with_retry(url, headers, payload, timeout=45)
+        r = await gemini_post_with_retry(url, headers, payload, timeout=45)
         if r.status_code == 200:
-            response_text = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            resp_json = await r.json()
+            response_text = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
             
             lines = response_text.split('\n')
             first_line = lines[0].strip()
@@ -298,7 +299,7 @@ async def get_my_last_posts(client, channel_name, limit=15):
     return combined[:limit]
 
 
-def select_and_compile_with_gemini(news_list, my_last_posts, category_name, channel_type, prefer_groq=False):
+async def select_and_compile_with_gemini(news_list, my_last_posts, category_name, channel_type, prefer_groq=False):
     """Вибирає тренд з RSS, перевіряє на дублікати та комбінує пост з 3+ джерел"""
     if not config.GEMINI_API_KEY:
         print("❌ Помилка: Ключ Gemini не знайдено!")
@@ -374,9 +375,9 @@ def select_and_compile_with_gemini(news_list, my_last_posts, category_name, chan
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
-        r = gemini_post_with_retry(url, headers, payload, timeout=45, prefer_groq=prefer_groq)
+        r = await gemini_post_with_retry(url, headers, payload, timeout=45, prefer_groq=prefer_groq)
         if r.status_code == 200:
-            res_json = r.json()
+            res_json = await r.json()
             response_text = res_json['candidates'][0]['content']['parts'][0]['text'].strip()
             
             status_match = re.search(r'RESPONSE_STATUS:\s*(\w+)', response_text)
@@ -463,7 +464,7 @@ async def get_latest_ai_posts(client):
             print(f"⚠️ Не вдалося зчитати канал @{channel}: {e}")
     return news_list
 
-def select_and_rewrite_ai_with_gemini(news_list, category_name):
+async def select_and_rewrite_ai_with_gemini(news_list, category_name):
     """Запитує у Gemini рерайт ШІ-поста під конкретну тематику"""
     api_key = getattr(config, 'GEMINI_AI_API_KEY', config.GEMINI_API_KEY)
     if not api_key:
@@ -503,9 +504,10 @@ def select_and_rewrite_ai_with_gemini(news_list, category_name):
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
-        r = gemini_post_with_retry(url, headers, payload, timeout=45)
+        r = await gemini_post_with_retry(url, headers, payload, timeout=45)
         if r.status_code == 200:
-            response_text = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            resp_json = await r.json()
+            response_text = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
             lines = response_text.split('\n')
             first_line = lines[0].strip()
             chosen_index = 0
@@ -690,7 +692,7 @@ def apply_brand_frame(photo_path, channel_type):
         print(f"⚠️ Error applying brand frame: {e}")
         return False
 
-def contains_russian_text(image_path):
+async def contains_russian_text(image_path):
     """
     Uses Gemini to analyze if the image contains any Russian text.
     Returns True if Russian text is present, False otherwise.
@@ -738,9 +740,10 @@ def contains_russian_text(image_path):
         }
         
         print(f"👁️ Sending image to Gemini for Russian text detection (OCR)...")
-        r = gemini_post_with_retry(url, headers, payload, timeout=25)
+        r = await gemini_post_with_retry(url, headers, payload, timeout=25)
         if r.status_code == 200:
-            result = r.json()['candidates'][0]['content']['parts'][0]['text'].strip().upper()
+            resp_json = await r.json()
+            result = resp_json['candidates'][0]['content']['parts'][0]['text'].strip().upper()
             print(f"🔍 Gemini OCR result: {result}")
             return "YES" in result
         else:
@@ -783,9 +786,10 @@ async def generate_ai_image(post_text, channel_type, save_path, image_url=None):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
             headers = {"Content-Type": "application/json"}
             payload = {"contents": [{"parts": [{"text": prompt_for_gemini}]}]}
-            r = gemini_post_with_retry(url, headers, payload, timeout=25)
+            r = await gemini_post_with_retry(url, headers, payload, timeout=25)
             if r.status_code == 200:
-                gemini_prompt = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+                resp_json = await r.json()
+                gemini_prompt = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
                 gemini_prompt = re.sub(r'^["\'`]+|["\'`]+$', '', gemini_prompt)
             else:
                 print(f"⚠️ Gemini prompt generation failed with code {r.status_code}: {r.text}")
@@ -1043,7 +1047,7 @@ async def fill_daily_queue(client, channel_filter="all"):
                 
             print(f"📦 Preparing AI post for category '{cat}'...")
             prefer_groq_val = (cat == "AI Productivity & Work")
-            post_data = select_and_compile_with_gemini(news_list, my_last_posts, cat, "ai", prefer_groq=prefer_groq_val)
+            post_data = await select_and_compile_with_gemini(news_list, my_last_posts, cat, "ai", prefer_groq=prefer_groq_val)
             if post_data and post_data.get("post_text"):
                 post_text = post_data["post_text"]
                 image_prompt = post_data["image_prompt"]
@@ -1102,7 +1106,7 @@ async def fill_daily_queue(client, channel_filter="all"):
                 
             print(f"📦 Preparing PSY post for category '{cat}'...")
             prefer_groq_val = (cat == "Practical Psychology")
-            post_data = select_and_compile_with_gemini(news_list, my_last_posts, cat, "psy", prefer_groq=prefer_groq_val)
+            post_data = await select_and_compile_with_gemini(news_list, my_last_posts, cat, "psy", prefer_groq=prefer_groq_val)
             if post_data and post_data.get("post_text"):
                 post_text = post_data["post_text"]
                 image_prompt = post_data["image_prompt"]
@@ -1153,7 +1157,7 @@ async def post_news_report(client):
         my_last_posts = await get_my_last_posts(client, config.TARGET_CHANNEL, limit=15)
         
         # 3. select and compile
-        post_data = select_and_compile_with_gemini(news_list, my_last_posts, "Trading & Finance News", "trading")
+        post_data = await select_and_compile_with_gemini(news_list, my_last_posts, "Trading & Finance News", "trading")
         if not post_data or not post_data.get("post_text"):
             print("❌ Не вдалося згенерувати пост трейдингу.")
             return
@@ -1325,7 +1329,7 @@ async def post_ai_category_update(client, category_name):
 
         my_last_posts = await get_my_last_posts(client, config.AI_TARGET_CHANNEL, limit=15)
         prefer_groq_val = (category_name == "AI Productivity & Work")
-        post_data = select_and_compile_with_gemini(news_list, my_last_posts, category_name, "ai", prefer_groq=prefer_groq_val)
+        post_data = await select_and_compile_with_gemini(news_list, my_last_posts, category_name, "ai", prefer_groq=prefer_groq_val)
         if not post_data or not post_data.get("post_text"):
             print("❌ Не вдалося згенерувати ШІ-пост.")
             return
@@ -1492,9 +1496,10 @@ async def post_weekly_digest(client):
             headers = {"Content-Type": "application/json"}
             payload = {"contents": [{"parts": [{"text": prompt}]}]}
             
-            r = gemini_post_with_retry(url, headers, payload, timeout=60)
+            r = await gemini_post_with_retry(url, headers, payload, timeout=60)
             if r.status_code == 200:
-                digest_text = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+                resp_json = await r.json()
+                digest_text = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
                 if digest_text.startswith('"') and digest_text.endswith('"'):
                     digest_text = digest_text[1:-1]
                 if digest_text.startswith('«') and digest_text.endswith('»'):
@@ -1626,7 +1631,7 @@ async def get_latest_psy_posts(client):
     return news_list
 
 
-def select_and_rewrite_psy_with_gemini(news_list, category_name):
+async def select_and_rewrite_psy_with_gemini(news_list, category_name):
     """Запитує у Gemini рерайт психологічного поста під конкретну тематику"""
     api_key = getattr(config, 'GEMINI_PSY_API_KEY', config.GEMINI_API_KEY)
     if not api_key:
@@ -1661,9 +1666,10 @@ def select_and_rewrite_psy_with_gemini(news_list, category_name):
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         
-        r = gemini_post_with_retry(url, headers, payload, timeout=45)
-        if r.status_code == 200:
-            response_text = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        r = await gemini_post_with_retry(url, headers, payload, timeout=45)
+        if r is not None and r.status_code == 200:
+            resp_json = await r.json()
+            response_text = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
             lines = response_text.split('\n')
             first_line = lines[0].strip()
             chosen_index = 0
@@ -1792,7 +1798,7 @@ async def post_psy_category_update(client, category_name):
 
         my_last_posts = await get_my_last_posts(client, config.PSY_TARGET_CHANNEL, limit=15)
         prefer_groq_val = (category_name == "Practical Psychology")
-        post_data = select_and_compile_with_gemini(news_list, my_last_posts, category_name, "psy", prefer_groq=prefer_groq_val)
+        post_data = await select_and_compile_with_gemini(news_list, my_last_posts, category_name, "psy", prefer_groq=prefer_groq_val)
         if not post_data or not post_data.get("post_text"):
             print("❌ Не вдалося згенерувати post з психології.")
             return

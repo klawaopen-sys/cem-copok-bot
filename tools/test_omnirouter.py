@@ -48,7 +48,7 @@ async def test_all():
     except Exception as ex:
         print(f"Request failed with exception: {ex}")
 
-    resp = gemini_post_with_retry(url, headers, payload)
+    resp = await gemini_post_with_retry(url, headers, payload)
     if resp and resp.status_code == 200:
         print("Response raw:")
         print(resp.text)

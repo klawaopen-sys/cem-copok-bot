@@ -17,7 +17,7 @@ PSY_DONOR_CHANNELS = getattr(config, 'PSY_DONOR_CHANNELS', [])
 REAL_ESTATE_CHANNELS = getattr(config, 'REAL_ESTATE_CHANNELS', [])
 MANICURE_CHANNELS = getattr(config, 'MANICURE_CHANNELS', [])
 
-def get_gemini_real_estate_comment(post_text):
+async def get_gemini_real_estate_comment(post_text):
     """Генерує розумний коментар до поста про нерухомість через Gemini"""
     if not config.GEMINI_API_KEY:
         return "Цікавий об'єкт, варто придивитися! 👀"
@@ -42,21 +42,22 @@ def get_gemini_real_estate_comment(post_text):
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         from tools.gemini_client import gemini_post_with_retry
-        r = gemini_post_with_retry(url, headers, payload, timeout=15)
-        if r.status_code == 200:
-            comment = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        r = await gemini_post_with_retry(url, headers, payload, timeout=15)
+        if r is not None and r.status_code == 200:
+            resp_json = await r.json()
+            comment = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
             if comment.startswith('"') and comment.endswith('"'):
                 comment = comment[1:-1]
             if comment.startswith('«') and comment.endswith('»'):
                 comment = comment[1:-1]
             return comment
         else:
-            print(f"Помилка Gemini API в коментарях про нерухомість: {r.status_code}")
+            print(f"Помилка Gemini API в коментарях про нерухомість: {r.status_code if r else 'None'}")
     except Exception as e:
         print(f"Помилка генерації коментаря про нерухомість: {e}")
     return "Цікавий варіант, треба обдумати! 👀"
 
-def get_gemini_manicure_comment(post_text):
+async def get_gemini_manicure_comment(post_text):
     """Генерує розумний коментар до б'юті-посту про манікюр через Gemini"""
     if not config.GEMINI_API_KEY:
         return "Дуже гарний манікюр! 😍"
@@ -81,21 +82,22 @@ def get_gemini_manicure_comment(post_text):
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         from tools.gemini_client import gemini_post_with_retry
-        r = gemini_post_with_retry(url, headers, payload, timeout=15)
-        if r.status_code == 200:
-            comment = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        r = await gemini_post_with_retry(url, headers, payload, timeout=15)
+        if r is not None and r.status_code == 200:
+            resp_json = await r.json()
+            comment = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
             if comment.startswith('"') and comment.endswith('"'):
                 comment = comment[1:-1]
             if comment.startswith('«') and comment.endswith('»'):
                 comment = comment[1:-1]
             return comment
         else:
-            print(f"Помилка Gemini API в коментарях про манікюр: {r.status_code}")
+            print(f"Помилка Gemini API в коментарях про манікюр: {r.status_code if r else 'None'}")
     except Exception as e:
         print(f"Помилка генерації коментаря про манікюр: {e}")
     return "Виглядає просто чудово! 😍"
 
-def get_gemini_comment(post_text):
+async def get_gemini_comment(post_text):
     """Генерує розумний коментар до трейдинг-посту через Gemini"""
     if not config.GEMINI_API_KEY:
         return "Цікаво, будемо спостерігати за ринком! 👀"
@@ -120,28 +122,29 @@ def get_gemini_comment(post_text):
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         from tools.gemini_client import gemini_post_with_retry
-        r = gemini_post_with_retry(url, headers, payload, timeout=15)
-        if r.status_code == 200:
-            comment = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        r = await gemini_post_with_retry(url, headers, payload, timeout=15)
+        if r is not None and r.status_code == 200:
+            resp_json = await r.json()
+            comment = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
             if comment.startswith('"') and comment.endswith('"'):
                 comment = comment[1:-1]
             if comment.startswith('«') and comment.endswith('»'):
                 comment = comment[1:-1]
             return comment
         else:
-            print(f"Помилка Gemini API в коментарях: {r.status_code}")
+            print(f"Помилка Gemini API в коментарях: {r.status_code if r else 'None'}")
     except Exception as e:
         print(f"Помилка генерації коментаря: {e}")
     return "Цікаво, подивимось що з цього вийде! 👀"
 
-def get_gemini_psychology_rewrite(post_text):
+async def get_gemini_psychology_rewrite(post_text):
     """Використовує Gemini для унікального рерайту психологічного поста українською мовою"""
     if not config.GEMINI_API_KEY:
         return post_text
     try:
         post_text = post_text[:2000] if post_text else ""
         prompt = (
-            "Ти — професійний психолог, автор популярного Telegram-каналу про психологію та саморозвиток.\n"
+            "Ти — професійний психолог, author популярного Telegram-каналу про психологію та саморозвиток.\n"
             "Твоє завдання — перекласти та переписати наступний пост українською мовою. Зроби його унікальним, цікавим та легким для сприйняття.\n\n"
             "КРИТИЧНО ВАЖЛИВІ ПРАВИЛА:\n"
             "1. Пост має бути написаний красивою, грамотною українською мовою з професійним, але розмовним і захоплюючим тоном.\n"
@@ -155,9 +158,10 @@ def get_gemini_psychology_rewrite(post_text):
         headers = {"Content-Type": "application/json"}
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
         from tools.gemini_client import gemini_post_with_retry
-        r = gemini_post_with_retry(url, headers, payload, timeout=30)
-        if r.status_code == 200:
-            rewrite = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        r = await gemini_post_with_retry(url, headers, payload, timeout=30)
+        if r is not None and r.status_code == 200:
+            resp_json = await r.json()
+            rewrite = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
             if rewrite.startswith('"') and rewrite.endswith('"'):
                 rewrite = rewrite[1:-1]
             if rewrite.startswith('«') and rewrite.endswith('»'):
@@ -307,14 +311,12 @@ async def register_commenter(client):
                     return
                     
                 print(f"📝 [{channel_title}] Генерую розумний коментар...")
-                loop = asyncio.get_event_loop()
-                
                 if is_re_channel:
-                    comment = await loop.run_in_executor(None, get_gemini_real_estate_comment, post_text)
+                    comment = await get_gemini_real_estate_comment(post_text)
                 elif is_manicure_channel:
-                    comment = await loop.run_in_executor(None, get_gemini_manicure_comment, post_text)
+                    comment = await get_gemini_manicure_comment(post_text)
                 else:
-                    comment = await loop.run_in_executor(None, get_gemini_comment, post_text)
+                    comment = await get_gemini_comment(post_text)
                 
                 if not comment or comment.strip().upper() == "SKIP":
                     return
@@ -406,7 +408,7 @@ async def register_commenter(client):
     #             if not post_text or len(post_text.strip()) < 30: return
     #             
     #             print(f"🧠 [@{channel_name}] Новий пост по психології. Надсилаю на рерайт...")
-    #             rewritten = await asyncio.get_event_loop().run_in_executor(None, get_gemini_psychology_rewrite, post_text)
+    #             rewritten = await get_gemini_psychology_rewrite(post_text)
     #             if not rewritten: return
     #             
     #             final_text = rewritten + getattr(config, 'PSY_SIGNATURE', '')

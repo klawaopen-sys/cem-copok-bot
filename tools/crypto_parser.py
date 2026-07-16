@@ -106,7 +106,7 @@ def get_btc_levels(btc_price):
     resist = round(btc_price * 1.015, -2)
     return f"{int(support1):,} / {int(support2):,}", f"{int(resist):,}"
 
-def get_gemini_trader_advice(crypto, forex, market):
+async def get_gemini_trader_advice(crypto, forex, market):
     """Генерує розумну пораду трейдеру за допомогою Google Gemini API"""
     if not config.GEMINI_API_KEY:
         return "Контролюйте ризики, ринок волатильний."
@@ -144,9 +144,9 @@ def get_gemini_trader_advice(crypto, forex, market):
         }
         
         from tools.gemini_client import gemini_post_with_retry
-        r = gemini_post_with_retry(url, headers, payload, timeout=15)
-        if r.status_code == 200:
-            data = r.json()
+        r = await gemini_post_with_retry(url, headers, payload, timeout=15)
+        if r is not None and r.status_code == 200:
+            data = await r.json()
             advice = data['candidates'][0]['content']['parts'][0]['text'].strip()
             # Clean up potential leading/trailing quotes
             if advice.startswith('"') and advice.endswith('"'):
@@ -155,7 +155,7 @@ def get_gemini_trader_advice(crypto, forex, market):
                 advice = advice[1:-1]
             return advice
         else:
-            print(f"Помилка Gemini API: HTTP {r.status_code}, {r.text}")
+            print(f"Помилка Gemini API: HTTP {r.status_code if r else 'None'}, {r.text if r else 'None'}")
     except Exception as e:
         print(f"Помилка генерації поради Gemini: {e}")
         
