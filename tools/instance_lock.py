@@ -15,7 +15,7 @@ class InstanceLock:
         self.gc = None
         self.sh = None
         self.ws = None
-        self.instance_id = "Railway" if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_STATIC_URL") else f"Local-{os.environ.get('COMPUTERNAME', 'PC')}"
+        self.instance_id = "VPS" if sys.platform != "win32" else f"Local-{os.environ.get('COMPUTERNAME', 'PC')}"
         self.stop_event = threading.Event()
         self.heartbeat_thread = None
 
@@ -79,7 +79,7 @@ class InstanceLock:
             print(f"   Інший інстанс бота ({other_inst}) вже запущений!")
             print(f"   Останній сигнал активності (heartbeat) від нього був {int(sec_ago)} сек. тому.")
             print("=" * 60)
-            print("👉 Будь ласка, спочатку зупиніть активний бот на Railway або інший локальний процес.")
+            print("👉 Будь ласка, спочатку зупиніть активний бот на сервері (PM2) або інший локальний процес.")
             print("====================================================\n")
             sys.exit(1)
 
