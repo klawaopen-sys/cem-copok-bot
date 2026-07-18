@@ -761,7 +761,12 @@ async def handle_psychologist_voice(message: Message, state: FSMContext):
 # ---------------------------------------------------------------------
 def morning_job():
     print(f"⏰ Час {config.MORNING_POST_TIME}! Запускаю ранковий фінансовий огляд...")
-    try: run_poster()
+    try:
+        from tools.poster import post_morning_report, run_poster
+        if main_loop:
+            asyncio.run_coroutine_threadsafe(post_morning_report(), main_loop)
+        else:
+            run_poster()
     except Exception as e: print(f"Помилка ранкового поста: {e}")
 
 def noon_job():
@@ -816,8 +821,11 @@ def focus_job():
 def daily_upgrade_job():
     print(f"⏰ Час {config.DAILY_UPGRADE_POST_TIME}! Запускаю щоденну прокачку для трейдерів...")
     try:
-        from tools.daily_upgrader import run_daily_upgrader
-        run_daily_upgrader()
+        from tools.daily_upgrader import post_daily_upgrade, run_daily_upgrader
+        if main_loop:
+            asyncio.run_coroutine_threadsafe(post_daily_upgrade(), main_loop)
+        else:
+            run_daily_upgrader()
     except Exception as e: print(f"Помилка щоденної прокачки: {e}")
 
 def weekly_digest_job():
