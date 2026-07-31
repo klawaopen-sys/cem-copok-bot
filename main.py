@@ -62,9 +62,9 @@ async def edit_rich_message_http(bot_token: str, chat_id: int, message_id: int, 
 async def get_gemini_streaming_reply(api_key: str, history: list, system_prompt: str, chat_id: int, bot_token: str, reply_markup: dict = None) -> str:
     import config
     omni_key = getattr(config, 'OMNIROUTER_API_KEY', None)
+    omni_url = getattr(config, 'OMNIROUTER_BASE_URL', '')
     session = await config.get_session()
-    if omni_key:
-        omni_url = getattr(config, 'OMNIROUTER_BASE_URL', 'http://localhost:20128/v1')
+    if omni_key and omni_url and not omni_url.startswith("http://localhost"):
         url = f"{omni_url.rstrip('/')}/chat/completions"
         headers = {
             "Authorization": f"Bearer {omni_key}",

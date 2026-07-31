@@ -24,7 +24,7 @@ API_HASH = os.getenv("API_HASH", "65354c57d6e3f7691120cf1e55b46fdc")
 # 3. Зовнішні API Ключі
 # ---------------------------------------------------------------------
 CMC_API_KEY = os.getenv("CMC_API_KEY", "eb3f0248df7946f681f7577a96fd85b7")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyDA7jVvIIh-2KRX6hYteGfkfIWzB-Fxlzc")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyC74V6k1kq583o5tiaZqwzboPGJ-blfhnY")
 # Зворотна сумісність: використовуємо єдиний ключ Gemini, якщо окремі не задані
 GEMINI_PSY_API_KEY = os.getenv("GEMINI_PSY_API_KEY") or GEMINI_API_KEY
 GEMINI_AI_API_KEY = os.getenv("GEMINI_AI_API_KEY") or GEMINI_API_KEY

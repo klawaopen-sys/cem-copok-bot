@@ -108,8 +108,8 @@ async def _attempt_omnirouter_request(json_payload):
     import config
     try:
         omni_key = getattr(config, 'OMNIROUTER_API_KEY', None)
-        omni_url = getattr(config, 'OMNIROUTER_BASE_URL', 'http://localhost:20128/v1')
-        if omni_key:
+        omni_url = getattr(config, 'OMNIROUTER_BASE_URL', '')
+        if omni_key and omni_url and not omni_url.startswith("http://localhost"):
             url = f"{omni_url.rstrip('/')}/chat/completions"
             headers = {
                 'Authorization': f'Bearer {omni_key}',
@@ -175,11 +175,13 @@ async def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries
     original_key_match = re.search(r'key=([^&]+)', url)
     original_key = original_key_match.group(1) if original_key_match else ""
     
+    KNOWN_INVALID_KEYS = {"AIzaSyDA7jVvIIh-2KRX6hYteGfkfIWzB-Fxlzc"}
+    
     api_keys = []
     if original_key:
         for k in original_key.split(','):
             k = k.strip()
-            if k and not k.startswith("AQ.") and k not in api_keys:
+            if k and not k.startswith("AQ.") and k not in KNOWN_INVALID_KEYS and k not in api_keys:
                 api_keys.append(k)
         
     for key_name in ['GEMINI_API_KEY', 'GEMINI_PSY_API_KEY', 'GEMINI_AI_API_KEY']:
@@ -187,7 +189,7 @@ async def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries
         if k_val:
             for k in k_val.split(','):
                 k = k.strip()
-                if k and not k.startswith("AQ.") and k not in api_keys:
+                if k and not k.startswith("AQ.") and k not in KNOWN_INVALID_KEYS and k not in api_keys:
                     api_keys.append(k)
             
     # List of valid active model names on the API
