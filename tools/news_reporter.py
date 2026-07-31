@@ -67,3 +67,25 @@ def fetch_rss_news(rss_urls, limit=5):
             print(f"⚠️ Помилка обробки RSS з {url}: {e}")
             
     return news_items
+
+async def fetch_tavily_news_async(topic_query="AI technology crypto news", limit=5):
+    """
+    Отримує актуальні новини через Tavily Search API.
+    """
+    try:
+        from tools.tavily_search import search_tavily_news
+        results = await search_tavily_news(topic_query, max_results=limit)
+        items = []
+        for r in results:
+            items.append({
+                "title": r.get("title", ""),
+                "link": r.get("url", ""),
+                "description": r.get("snippet", ""),
+                "source": "Tavily Search API",
+                "image_url": ""
+            })
+        return items
+    except Exception as e:
+        print(f"⚠️ Помилка Tavily Search: {e}")
+        return []
+
