@@ -49,6 +49,37 @@ def limit_caption_text(text, max_len=1024):
     # Truncate plain text
     return clean_text[:max_len - 3] + "...", None
 
+async def send_channel_post_via_bot(bot_token, channel_target, text, photo_path=None, reply_markup=None):
+    """Fallback publisher using official Telegram Bot API (Aiogram)"""
+    bot = Bot(token=bot_token)
+    msg = None
+    try:
+        if photo_path and os.path.exists(photo_path):
+            caption_text, parse_mode = limit_caption_text(text, 1024)
+            msg = await bot.send_photo(
+                chat_id=channel_target,
+                photo=FSInputFile(photo_path),
+                caption=caption_text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup
+            )
+            try: os.remove(photo_path)
+            except Exception: pass
+        else:
+            msg = await bot.send_message(
+                chat_id=channel_target,
+                text=text,
+                parse_mode='HTML',
+                reply_markup=reply_markup
+            )
+        print(f"✅ [Bot API Fallback] Post sent successfully to {channel_target}!")
+        return msg
+    except Exception as e:
+        print(f"❌ [Bot API Fallback] Error sending post to {channel_target}: {e}")
+        return None
+    finally:
+        await bot.session.close()
+
 
 # ---------------------------------------------------------------------
 # А. Налаштування для Трейдингу (12:00)
@@ -400,6 +431,21 @@ async def select_and_compile_with_gemini(news_list, my_last_posts, category_name
                     post_text = subparts[0].strip()
                     if len(subparts) > 1:
                         image_prompt = subparts[1].strip()
+
+            if not post_text:
+                # Fallback: clean out status tags and use the generated response directly
+                clean_text = re.sub(r'RESPONSE_STATUS:\s*\w+\s*', '', response_text, flags=re.IGNORECASE)
+                clean_text = re.sub(r'POST_TEXT:\s*', '', clean_text, flags=re.IGNORECASE)
+                if 'IMAGE_PROMPT:' in clean_text:
+                    parts = clean_text.split('IMAGE_PROMPT:')
+                    post_text = parts[0].strip()
+                    if not image_prompt and len(parts) > 1:
+                        image_prompt = parts[1].strip()
+                else:
+                    post_text = clean_text.strip()
+
+            if not image_prompt:
+                image_prompt = f"Abstract high quality conceptual visual art for {channel_type} topic {category_name}, vibrant color palette, modern design, no text, no logos"
             
             post_text = re.sub(r'^["\'`]+|["\'`]+$', '', post_text).strip()
             image_prompt = re.sub(r'^["\'`]+|["\'`]+$', '', image_prompt).strip()
@@ -1381,45 +1427,56 @@ async def post_ai_category_update(client, category_name):
         if not generated_ok:
             photo_path = None
 
-        # Публікуємо в ІИ-канал через Telethon (від імені користувача Клава!)
+        # Публікуємо в ШІ-канал (Telethon з фолбеком на Bot API)
         print(f"📤 Надсилаю ШІ-пост '{category_name}' в канал {config.AI_TARGET_CHANNEL}...")
         msg = None
+        reply_markup_ai = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="завантажити🎙️VOICE WIDGE", url="https://t.me/te_shoo_treba/194"),
+                InlineKeyboardButton(text="🤖 Замовити такого ж бота", url="https://klawaopen-sys.github.io/nova-bots-space/")
+            ]
+        ])
+        
+        if target_time:
+            await sleep_until_time(target_time)
+
+        ai_bot_token = getattr(config, 'LIBRARIAN_BOT_TOKEN', config.BOT_TOKEN)
         try:
-            if not client.is_connected():
-                await client.connect()
-            if target_time:
-                await sleep_until_time(target_time)
-            if photo_path and os.path.exists(photo_path):
-                msg = await client.send_message(
-                    entity=config.AI_TARGET_CHANNEL,
-                    message=final_post_text,
-                    file=photo_path,
-                    parse_mode='html',
-                    buttons=[[
-                        Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194"),
-                        Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
-                    ]]
-                )
-                try: os.remove(photo_path)
-                except Exception: pass
+            if client and client.is_connected():
+                if photo_path and os.path.exists(photo_path):
+                    msg = await client.send_message(
+                        entity=config.AI_TARGET_CHANNEL,
+                        message=final_post_text,
+                        file=photo_path,
+                        parse_mode='html',
+                        buttons=[[
+                            Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194"),
+                            Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                        ]]
+                    )
+                    try: os.remove(photo_path)
+                    except Exception: pass
+                else:
+                    msg = await client.send_message(
+                        entity=config.AI_TARGET_CHANNEL,
+                        message=final_post_text,
+                        parse_mode='html',
+                        buttons=[[
+                            Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194"),
+                            Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                        ]]
+                    )
             else:
-                msg = await client.send_message(
-                    entity=config.AI_TARGET_CHANNEL,
-                    message=final_post_text,
-                    parse_mode='html',
-                    buttons=[[
-                        Button.url("завантажити🎙️VOICE WIDGE", "https://t.me/te_shoo_treba/194"),
-                        Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
-                    ]]
-                )
+                msg = await send_channel_post_via_bot(ai_bot_token, config.AI_TARGET_CHANNEL, final_post_text, photo_path, reply_markup_ai)
                 
             print(f"✅ ШІ-пост '{category_name}' успішно опубліковано!")
+            msg_id = getattr(msg, 'id', getattr(msg, 'message_id', None))
             channel_username = config.AI_TARGET_CHANNEL.replace('@', '')
-            post_link = f"https://t.me/{channel_username}/{msg.id}" if msg else ""
+            post_link = f"https://t.me/{channel_username}/{msg_id}" if msg_id else ""
             log_post_to_sheet('ai', category_name, final_post_text, 'published', post_link)
 
-            # Якщо коментарі є і знайдено промпт, публікуємо його у коментарях
-            if msg and extracted_prompt and has_linked_chat:
+            # Якщо коментарі є і знайдено промпт, публікуємо його у коментарях через Telethon
+            if client and client.is_connected() and msg and extracted_prompt and has_linked_chat:
                 try:
                     await asyncio.sleep(3.0)  # Маленька затримка для надійності
                     await client.send_message(entity=config.AI_TARGET_CHANNEL, message=extracted_prompt, comment_to=msg)
@@ -1427,14 +1484,21 @@ async def post_ai_category_update(client, category_name):
                 except Exception as e:
                     print(f"⚠️ Не вдалося опублікувати промпт в коментарях: {e}")
         except Exception as e:
-            print(f"❌ Помилка надсилання в Telegram (можливо AuthKeyDuplicatedError): {e}")
-            # Mock fallback
-            temp_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp")
-            os.makedirs(temp_log_dir, exist_ok=True)
-            mock_post_path = os.path.join(temp_log_dir, f"mock_post_ai_{category_name.replace(' ', '_')}.txt")
-            with open(mock_post_path, "w", encoding="utf-8") as f:
-                f.write(f"=== MOCK POST ===\nChannel: ai\nCategory: {category_name}\nPhoto: {photo_path}\nText:\n{final_post_text}")
-            print(f"💾 Пост збережено локально: {mock_post_path}")
+            print(f"⚠️ Спроба Telethon не вдалася: {e}. Переходжу на Bot API...")
+            msg = await send_channel_post_via_bot(ai_bot_token, config.AI_TARGET_CHANNEL, final_post_text, photo_path, reply_markup_ai)
+            if msg:
+                msg_id = getattr(msg, 'message_id', None)
+                channel_username = config.AI_TARGET_CHANNEL.replace('@', '')
+                post_link = f"https://t.me/{channel_username}/{msg_id}" if msg_id else ""
+                log_post_to_sheet('ai', category_name, final_post_text, 'published', post_link)
+            else:
+                # Mock fallback
+                temp_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp")
+                os.makedirs(temp_log_dir, exist_ok=True)
+                mock_post_path = os.path.join(temp_log_dir, f"mock_post_ai_{category_name.replace(' ', '_')}.txt")
+                with open(mock_post_path, "w", encoding="utf-8") as f:
+                    f.write(f"=== MOCK POST ===\nChannel: ai\nCategory: {category_name}\nPhoto: {photo_path}\nText:\n{final_post_text}")
+                print(f"💾 Пост збережено локально: {mock_post_path}")
             
     except Exception as e:
         print(f"❌ Помилка в процесі публікації ШІ-категорії '{category_name}': {e}")
@@ -1826,53 +1890,71 @@ async def post_psy_category_update(client, category_name):
                 photo_path = None
                 print(f"📝 Фото відсутнє для категорії '{category_name}'. Надсилаю як текстовий пост.")
 
-        # Публікуємо в канал через Telethon (від імені користувача Клава!)
+        # Публікуємо в канал Психології (Telethon з фолбеком на Bot API)
         print(f"📤 Надсилаю психологічний пост '{category_name}' в канал {config.PSY_TARGET_CHANNEL}...")
         msg = None
+        reply_markup_psy = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="💬 Чат з Психологом 🌿", url="https://t.me/bbig333_bot"),
+                InlineKeyboardButton(text="🤖 Замовити такого ж бота", url="https://klawaopen-sys.github.io/nova-bots-space/")
+            ]
+        ])
+        psy_token = getattr(config, 'PSY_BOT_TOKEN', config.BOT_TOKEN)
+        
+        if target_time:
+            await sleep_until_time(target_time)
+
         try:
-            if not client.is_connected():
-                await client.connect()
-            if target_time:
-                await sleep_until_time(target_time)
-            if photo_path and os.path.exists(photo_path):
-                is_default = (photo_path.endswith("psy_default.png"))
-                msg = await client.send_message(
-                    entity=config.PSY_TARGET_CHANNEL,
-                    message=final_post_text,
-                    file=photo_path,
-                    parse_mode='html',
-                    buttons=[[
-                        Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot"),
-                        Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
-                    ]]
-                )
-                if not is_default:
-                    try: os.remove(photo_path)
-                    except Exception: pass
+            if client and client.is_connected():
+                if photo_path and os.path.exists(photo_path):
+                    is_default = (photo_path.endswith("psy_default.png"))
+                    msg = await client.send_message(
+                        entity=config.PSY_TARGET_CHANNEL,
+                        message=final_post_text,
+                        file=photo_path,
+                        parse_mode='html',
+                        buttons=[[
+                            Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot"),
+                            Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                        ]]
+                    )
+                    if not is_default:
+                        try: os.remove(photo_path)
+                        except Exception: pass
+                else:
+                    msg = await client.send_message(
+                        entity=config.PSY_TARGET_CHANNEL,
+                        message=final_post_text,
+                        parse_mode='html',
+                        buttons=[[
+                            Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot"),
+                            Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
+                        ]]
+                    )
             else:
-                msg = await client.send_message(
-                    entity=config.PSY_TARGET_CHANNEL,
-                    message=final_post_text,
-                    parse_mode='html',
-                    buttons=[[
-                        Button.url("💬 Чат з Психологом 🌿", "https://t.me/bbig333_bot"),
-                        Button.url("🤖 Замовити такого ж бота", "https://klawaopen-sys.github.io/nova-bots-space/")
-                    ]]
-                )
+                msg = await send_channel_post_via_bot(psy_token, config.PSY_TARGET_CHANNEL, final_post_text, photo_path, reply_markup_psy)
             
+            msg_id = getattr(msg, 'id', getattr(msg, 'message_id', None))
             channel_username = config.PSY_TARGET_CHANNEL.replace('@', '')
-            post_link = f"https://t.me/{channel_username}/{msg.id}" if msg else ""
+            post_link = f"https://t.me/{channel_username}/{msg_id}" if msg_id else ""
             log_post_to_sheet('psy', category_name, final_post_text, 'published', post_link)
-            print(f"✅ Психологічний пост '{category_name}' успешно опубліковано!")
+            print(f"✅ Психологічний пост '{category_name}' успішно опубліковано!")
         except Exception as e:
-            print(f"❌ Помилка надсилання в Telegram (можливо AuthKeyDuplicatedError): {e}")
-            # Mock fallback
-            temp_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp")
-            os.makedirs(temp_log_dir, exist_ok=True)
-            mock_post_path = os.path.join(temp_log_dir, f"mock_post_psy_{category_name.replace(' ', '_')}.txt")
-            with open(mock_post_path, "w", encoding="utf-8") as f:
-                f.write(f"=== MOCK POST ===\nChannel: psy\nCategory: {category_name}\nPhoto: {photo_path}\nText:\n{final_post_text}")
-            print(f"💾 Пост збережено локально: {mock_post_path}")
+            print(f"⚠️ Спроба Telethon не вдалася: {e}. Переходжу на Bot API...")
+            msg = await send_channel_post_via_bot(psy_token, config.PSY_TARGET_CHANNEL, final_post_text, photo_path, reply_markup_psy)
+            if msg:
+                msg_id = getattr(msg, 'message_id', None)
+                channel_username = config.PSY_TARGET_CHANNEL.replace('@', '')
+                post_link = f"https://t.me/{channel_username}/{msg_id}" if msg_id else ""
+                log_post_to_sheet('psy', category_name, final_post_text, 'published', post_link)
+            else:
+                # Mock fallback
+                temp_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp")
+                os.makedirs(temp_log_dir, exist_ok=True)
+                mock_post_path = os.path.join(temp_log_dir, f"mock_post_psy_{category_name.replace(' ', '_')}.txt")
+                with open(mock_post_path, "w", encoding="utf-8") as f:
+                    f.write(f"=== MOCK POST ===\nChannel: psy\nCategory: {category_name}\nPhoto: {photo_path}\nText:\n{final_post_text}")
+                print(f"💾 Пост збережено локально: {mock_post_path}")
             
     except Exception as e:
         print(f"❌ Помилка в процесі публікації психологічної категорії '{category_name}': {e}")

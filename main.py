@@ -901,24 +901,35 @@ async def main():
     lock.acquire()
     
     try:
-        if not os.path.exists("klava.session"):
-            print("❌ Файл klava.session не знайдено! Юзербот не зможе працювати.")
-            return
+        # 1. Запуск Telethon юзербота (безпечна перевірка без блокування)
+        telethon_client = client
+        if os.path.exists("klava.session"):
+            try:
+                await telethon_client.connect()
+                if await telethon_client.is_user_authorized():
+                    print("✅ Telethon юзербот підключено успішно!")
+                else:
+                    print("⚠️ Telethon сесія не авторизована. Працюємо у режимі Bot API.")
+                    telethon_client = None
+            except Exception as e:
+                print(f"⚠️ Помилка підключення Telethon ({e}). Працюємо у режимі Bot API.")
+                telethon_client = None
+        else:
+            print("⚠️ Файл klava.session не знайдено. Працюємо у режимі Bot API.")
+            telethon_client = None
 
-        # 1. Запуск Telethon юзербота
-        await client.start()
-        print("✅ Telethon юзербот підключено успішно!")
-        
-        # Запуск одноразового очищення дублікатів
-        try:
-            from tools.cleanup import run_duplicates_cleanup
-            await run_duplicates_cleanup(client)
-        except Exception as cle:
-            print(f"⚠️ Помилка запуску очищення дублікатів: {cle}")
-        
-        # Реєструємо всі авторепостери та автокоментатори екосистеми
-        await register_commenter(client)
-        print("✅ Юзербот обробники успішно зареєстровані!")
+        if telethon_client:
+            try:
+                from tools.cleanup import run_duplicates_cleanup
+                await run_duplicates_cleanup(telethon_client)
+            except Exception as cle:
+                print(f"⚠️ Помилка запуску очищення дублікатів: {cle}")
+
+            try:
+                await register_commenter(telethon_client)
+                print("✅ Юзербот обробники успішно зареєстровані!")
+            except Exception as e:
+                print(f"⚠️ Помилка реєстрації обробників юзербота: {e}")
         
         # Налаштовуємо команди для обох ботів та очищуємо старі
         try:
@@ -1009,8 +1020,10 @@ async def main():
         threading.Thread(target=schedule_thread_func, daemon=True).start()
         
         print("⏳ Супер-бот активний та очікує подій...")
-        # Тримаємо програму відкритою і слухаємо Telethon
-        await client.run_until_disconnected()
+        if telethon_client and telethon_client.is_connected():
+            await telethon_client.run_until_disconnected()
+        else:
+            await asyncio.Event().wait()
     finally:
         await config.close_session()
         lock.release()

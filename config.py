@@ -125,9 +125,6 @@ PSY_SLOT_1_TIME = '08:30'  # Morning Motivation (Мотивація та нат�
 PSY_SLOT_2_TIME = '13:30'  # Practical Psychology — НЕ 14:00 (конфлікт з трейдингом)
 PSY_SLOT_3_TIME = '19:30'  # Mindfulness & Relationships — НЕ 19:00 (конфлікт з прокачкою)
 
-# Сигнатура з посиланням на психолога в кінці постів психології
-PSY_SIGNATURE = "\n\n🌿 <b>Твій особистий ШІ-Психолог —  24/7👇</b>"
-
 # ---------------------------------------------------------------------
 # 6. Проект "ТЕ ЩО ТРЕБА" (Штучний Інтелект / AI)
 # ---------------------------------------------------------------------
@@ -152,8 +149,21 @@ AI_DONOR_CHANNELS = [
     -1002546853359  # ID приватного каналу 'Никита Велс | AI'
 ]
 
-# Сигнатура з посиланням на бібліотекаря в кінці постів ІИ
-AI_SIGNATURE = "\n\n🎙️ <b>Отримати безкоштовний голосовий віджет👇</b>"
+# Посилання на опубліковані витринні пости проектів
+SHOWCASE_LINKS = {
+    'trading': 'https://t.me/cem_copok/987',
+    'psy': 'https://t.me/ncux_olo_guY/846',
+    'ai': 'https://t.me/te_shoo_treba/356',
+    'manicure': 'https://t.me/manicure_ta_pedicure/195',
+    'crm': 'https://t.me/kliuchi_vid_mrii/121'
+}
+
+# Сигнатури для щоденних постів
+TRADING_SIGNATURE = "\n\n📊 <b><a href=\"https://t.me/cem_copok/987\">Як працює авто-система «Сім Сорок»</a></b>"
+PSY_SIGNATURE = "\n\n🧠 <b><a href=\"https://t.me/ncux_olo_guY/846\">Можливості нашого ШІ-Психолога</a></b>"
+AI_SIGNATURE = "\n\n🤖 <b><a href=\"https://t.me/te_shoo_treba/356\">Дізнатися більше про наших AI-асистентів</a></b>"
+MANICURE_SIGNATURE = "\n\n💅 <b><a href=\"https://t.me/manicure_ta_pedicure/195\">Про сервіс онлайн-запису «Записуха»</a></b>"
+CRM_SIGNATURE = "\n\n💼 <b><a href=\"https://t.me/kliuchi_vid_mrii/121\">Можливості нашої Telegram CRM-системи</a></b>"
 
 # ---------------------------------------------------------------------
 # 7. Проект "БОТ-БІБЛІОТЕКАР" (@librar_ian_bot)

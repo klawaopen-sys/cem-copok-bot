@@ -68,9 +68,17 @@ async def _attempt_groq_fallback(json_payload):
             }
             
             messages = translate_gemini_to_openai(json_payload)
+            # Truncate messages to prevent Groq 413 / 12,000 TPM limit errors
+            truncated_messages = []
+            for m in messages:
+                content = m.get("content", "")
+                if len(content) > 6000:
+                    content = content[:6000] + "\n...[truncated for Groq limit]..."
+                truncated_messages.append({"role": m.get("role", "user"), "content": content})
+                
             groq_payload = {
                 'model': 'llama-3.3-70b-versatile',
-                'messages': messages
+                'messages': truncated_messages
             }
             
             print("🔌 [Gemini Client] Attempting Groq request (Llama-3.3)...")
