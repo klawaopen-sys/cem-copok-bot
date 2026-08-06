@@ -16,6 +16,8 @@ import re
 import base64
 from tools.news_reporter import fetch_rss_news
 from tools.gemini_client import gemini_post_with_retry
+from tools.dedup_engine import get_combined_history, save_to_local_history, filter_unique_news_pool, load_local_history, clean_and_sanitize_final_post
+
 
 async def sleep_until_time(target_time_str):
     """
@@ -132,9 +134,10 @@ async def select_and_rewrite_news_with_gemini(news_items):
         "4. КРИТИЧНО: Пиши бездоганною, природною українською мовою без русизмів чи кальок з англійської. Наприклад, 'stickers from a photo' перекладай виключно як 'стікери з фото' (використовуй прийменник 'з' для позначення джерела/походження, а не 'за', що означає плату або обмін). Текст має бути стилістично ідеально відшліфованим.\n"
         "5. КРИТИЧНО: Якщо в тексті згадуються теми штучного інтелекту, нейромереж чи ШІ-інструментів, обов'язково зроби красиве текстове відсилання-посилання на наш партнерський канал про штучний інтелект: @te_shoo_treba (наприклад, 'дізнатися більше можна в <b><a href=\"https://t.me/te_shoo_treba\">Те що треба | AI</a></b>'). "
         "Якщо в тексті згадується психологія, стрес, емоції чи ментальне здоров'я, зроби красиве відсилання на наш партнерський канал про психологію: @ncux_olo_guY (наприклад, 'підтримати ментальне здоров\\'я допоможе <b><a href=\"https://t.me/ncux_olo_guY\">Нейро-Апгрейд</a></b>').\n"
-        "6. ВАЖЛИВО: Використовуй ТІЛЬКИ HTML-теги для виділення жирного тексту: <b>текст</b> та </b>. НІКОЛИ не використовуй маркдаун зі зірочками (типу **текст** або *текст*).\n"
+        "6. ВАЖЛИВО: Використовуй ТІЛЬКИ HTML-теги для виділення жирного тексту: <b>текст</b>. НІКОЛИ не використовуй маркдаун зі зірочками (типу **текст** або *текст*).\n"
         "7. В кінці поста додай тематичні хештеги.\n"
-        "8. Золоте правило: у НАЙПЕРШОМУ рядку своєї відповіді напиши ТІЛЬКИ індекс обраного кандидата у форматі 'INDEX: X' (наприклад, 'INDEX: 3'), а далі з нового рядка пиши текст самого поста.\n\n"
+        "8. КРИТИЧНО ЗАБОРОНЕНО: Не додавай привітання ('Доброго дня'), фрази 'Новий пост', 'Я головний редактор', 'Я проглянув 15 постів'. Пиши ОДРАЗУ чистий текст поста без вступного сміття!\n"
+        "9. Золоте правило: у НАЙПЕРШОМУ рядку своєї відповіді напиши ТІЛЬКИ індекс обраного кандидата у форматі 'INDEX: X' (наприклад, 'INDEX: 3'), а далі з нового рядка пиши ТІЛЬКИ текст самого поста.\n\n"
         "Почни відповідь з 'INDEX: X' та пиши виключно українською мовою з використанням HTML-форматування <b>...</b> для жирного тексту."
     )
 
@@ -263,71 +266,36 @@ def log_post_to_sheet(channel_type, category, post_text, status="published", pos
     except Exception as e:
         print(f"⚠️ Failed to log post to sheet: {e}")
 
-async def get_my_last_posts(client, channel_name, limit=15):
-    """Зчитує останні limit повідомлень з власного каналу та Google Таблиць. Стійка до AuthKeyDuplicatedError."""
-    # Збільшуємо ліміт мінімум до 25, щоб уникнути повторів недавніх новин
-    limit = max(limit, 25)
-    posts = []
-    print(f"📖 Зчитую історію власного каналу {channel_name} (ліміт: {limit})...")
+async def get_my_last_posts(client, channel_name, limit=25):
+    """Зчитує останні limit повідомлень з власного каналу, Google Таблиць та локального JSON-кэшу."""
+    limit = max(limit, 80)
+    tmp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".tmp")
     
-    # 1. Спроба зчитати з Telegram через Telethon
-    tg_posts = []
-    if client:
-        try:
-            if not client.is_connected():
-                await client.connect()
-            async for message in client.iter_messages(channel_name, limit=limit):
-                text = message.text or message.message
-                if text:
-                    tg_posts.append(text.strip())
-            print(f"✅ Успішно зчитано {len(tg_posts)} останніх постів з Telegram через Telethon.")
-        except Exception as e:
-            print(f"⚠️ Не вдалося зчитати історію каналу через Telethon: {e}")
-            print("🔄 Спроба зчитати історію через веб-скрейпер...")
-            web_posts = fetch_channel_history_web(channel_name)
-            if web_posts:
-                tg_posts = web_posts
-                print(f"✅ Успішно зчитано {len(tg_posts)} останніх постів через веб-скрейпер!")
-    else:
-        print("🔄 Client не надано. Спроба зчитати історію через веб-скрейпер...")
-        web_posts = fetch_channel_history_web(channel_name)
-        if web_posts:
-            tg_posts = web_posts
-            print(f"✅ Успішно зчитано {len(tg_posts)} останніх постів через веб-скрейпер!")
-
-    # 2. Спроба зчитати з Google Sheets
+    # 1. Отримуємо комбіновану історію (Telethon + Web Scraper + Local JSON)
+    combined_posts = await get_combined_history(client, channel_name, tmp_dir, limit=limit)
+    
+    # 2. Додаємо зчитування з Google Sheets
     sheet_posts = []
     try:
         channel_type = get_channel_type_by_name(channel_name)
         sheet_posts = get_last_posts_from_sheet(channel_type, limit=limit)
-        print(f"✅ Успішно зчитано {len(sheet_posts)} останніх постів з Google Sheets для '{channel_type}'.")
-    except Exception as se:
-        print(f"⚠️ Не вдалося зчитати історію з Google Sheets: {se}")
+    except Exception:
+        pass
 
-    # 3. Об'єднуємо обидва джерела унікально
-    combined = []
     seen = set()
-    
-    # Нормалізація для надійного порівняння дублікатів
-    def normalize(t):
-        t_clean = re.sub(r'<[^>]+>', '', t)  # Видаляємо HTML-теги
-        t_clean = re.sub(r'\s+', '', t_clean) # Видаляємо всі пробіли
-        return t_clean.lower()
-        
-    for p in tg_posts:
-        norm = normalize(p)
-        if norm and norm not in seen:
-            seen.add(norm)
-            combined.append(p)
-            
-    for p in sheet_posts:
-        norm = normalize(p)
-        if norm and norm not in seen:
-            seen.add(norm)
-            combined.append(p)
-            
-    print(f"📊 Разом сформовано {len(combined)} унікальних постів в історії для перевірки дублікатів.")
-    return combined[:limit]
+    final_combined = []
+    def norm(t):
+        return re.sub(r'\s+', '', re.sub(r'<[^>]+>', '', t)).lower()
+
+    for p in combined_posts + sheet_posts:
+        n = norm(p)
+        if n and n not in seen:
+            seen.add(n)
+            final_combined.append(p)
+
+    print(f"📊 Разом сформовано {len(final_combined)} унікальних постів в історії для перевірки дублікатів.")
+    return final_combined[:limit]
+
 
 
 async def select_and_compile_with_gemini(news_list, my_last_posts, category_name, channel_type, prefer_groq=False):
@@ -449,6 +417,7 @@ async def select_and_compile_with_gemini(news_list, my_last_posts, category_name
             
             post_text = re.sub(r'^["\'`]+|["\'`]+$', '', post_text).strip()
             image_prompt = re.sub(r'^["\'`]+|["\'`]+$', '', image_prompt).strip()
+            post_text = clean_and_sanitize_final_post(post_text)
             
             return {
                 "post_text": post_text,
@@ -855,9 +824,11 @@ async def generate_ai_image(post_text, channel_type, save_path, image_url=None):
 
     # --- ШАГ 1: Pollinations AI ---
     try:
-        print("🚀 [Step 1] Generating via Pollinations AI...")
+        import random
+        seed = random.randint(1, 9999999)
+        print(f"🚀 [Step 1] Generating via Pollinations AI (seed={seed})...")
         encoded_prompt = urllib.parse.quote(final_prompt)
-        gen_url = f"https://image.pollinations.ai/p/{encoded_prompt}?width=768&height=432&nologo=true"
+        gen_url = f"https://image.pollinations.ai/p/{encoded_prompt}?width=768&height=432&nologo=true&seed={seed}"
         r = requests.get(gen_url, timeout=25)
         if r.status_code == 200 and len(r.content) > 5000:
             with open(save_path, "wb") as f:
@@ -1211,6 +1182,7 @@ async def post_news_report(client):
         post_text = post_data["post_text"]
         image_prompt = post_data["image_prompt"]
         
+        post_text = clean_and_sanitize_final_post(post_text)
         post_text = apply_referral_links(post_text)
         post_text = auto_replace_links(post_text)
         
