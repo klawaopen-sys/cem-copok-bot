@@ -77,7 +77,7 @@ async def _attempt_groq_fallback(json_payload):
                 truncated_messages.append({"role": m.get("role", "user"), "content": content})
                 
             groq_payload = {
-                'model': 'llama-3.3-70b-versatile',
+                'model': 'openai/gpt-oss-120b',
                 'messages': truncated_messages
             }
             
@@ -201,7 +201,7 @@ async def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries
                     api_keys.append(k)
             
     # List of valid active model names on the API
-    models = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.5-pro"]
+    models = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-pro"]
     
     # Identify the current model in the url
     current_model = "gemini-2.5-flash"

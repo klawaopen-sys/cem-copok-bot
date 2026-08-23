@@ -971,7 +971,7 @@ async def main():
         # Трейдинг
         schedule.every().day.at(get_time_minus_minutes(config.MORNING_POST_TIME), config.TIMEZONE).do(morning_job)
         schedule.every().day.at(get_time_minus_minutes(config.FOCUS_POST_TIME), config.TIMEZONE).do(focus_job)
-        schedule.every().day.at(get_time_minus_minutes("14:00"), config.TIMEZONE).do(noon_job)
+        # schedule.every().day.at(get_time_minus_minutes("14:00"), config.TIMEZONE).do(noon_job)
         schedule.every().day.at(get_time_minus_minutes(config.DAILY_UPGRADE_POST_TIME), config.TIMEZONE).do(daily_upgrade_job)
         # Штучний Інтелект (AI)
         schedule.every().day.at(get_time_minus_minutes(config.AI_SLOT_1_TIME), config.TIMEZONE).do(ai_job_slot_1)
