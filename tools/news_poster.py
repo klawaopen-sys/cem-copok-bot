@@ -77,7 +77,9 @@ async def send_channel_post_via_bot(bot_token, channel_target, text, photo_path=
         print(f"✅ [Bot API Fallback] Post sent successfully to {channel_target}!")
         return msg
     except Exception as e:
-        print(f"❌ [Bot API Fallback] Error sending post to {channel_target}: {e}")
+        print(f"❌ [Bot API Fallback] Error sending post to {channel_target}: {type(e).__name__} - {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
     finally:
         await bot.session.close()
@@ -1845,6 +1847,7 @@ async def post_psy_category_update(client, category_name):
 
         final_post_text = post_text
         final_post_text = auto_replace_links(final_post_text)
+        final_post_text = re.sub(r"<br\s*/?>", "\n", final_post_text, flags=re.IGNORECASE)
 
         # Генерація картинки через ІІ з накладенням рамки
         photo_path = "temp_psy_post.jpg"

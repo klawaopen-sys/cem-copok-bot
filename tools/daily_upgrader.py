@@ -147,6 +147,8 @@ async def post_daily_upgrade():
         if len(post_text) > 1024:
             post_text = post_text[:1020] + "..."
             
+        post_text = clean_html_for_telegram(post_text)
+            
         from tools.news_poster import sleep_until_time
         await sleep_until_time(config.DAILY_UPGRADE_POST_TIME)
             
