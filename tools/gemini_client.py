@@ -76,36 +76,42 @@ async def _attempt_groq_fallback(json_payload):
                     content = content[:6000] + "\n...[truncated for Groq limit]..."
                 truncated_messages.append({"role": m.get("role", "user"), "content": content})
                 
-            groq_payload = {
-                'model': 'openai/gpt-oss-120b',
-                'messages': truncated_messages
-            }
-            
-            print("🔌 [Gemini Client] Attempting Groq request (Llama-3.3)...")
+            groq_models = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.6-27b', 'allam-2-7b']
             session = await config.get_session()
-            async with session.post(groq_url, json=groq_payload, headers=headers_groq, timeout=30) as resp:
-                if resp.status == 200:
-                    resp_json = await resp.json()
-                    groq_text = resp_json['choices'][0]['message']['content'].strip()
-                    print("✅ [Gemini Client] Groq request successful!")
-                    
-                    gemini_compatible_json = {
-                        "candidates": [
-                            {
-                                "content": {
-                                    "parts": [
-                                        {
-                                            "text": groq_text
+            
+            for groq_model in groq_models:
+                groq_payload = {
+                    'model': groq_model,
+                    'messages': truncated_messages
+                }
+                
+                print(f"🔌 [Gemini Client] Attempting Groq request ({groq_model})...")
+                try:
+                    async with session.post(groq_url, json=groq_payload, headers=headers_groq, timeout=30) as resp:
+                        if resp.status == 200:
+                            resp_json = await resp.json()
+                            groq_text = resp_json['choices'][0]['message']['content'].strip()
+                            print(f"✅ [Gemini Client] Groq request successful with model {groq_model}!")
+                            
+                            gemini_compatible_json = {
+                                "candidates": [
+                                    {
+                                        "content": {
+                                            "parts": [
+                                                {
+                                                    "text": groq_text
+                                                }
+                                            ]
                                         }
-                                    ]
-                                }
+                                    }
+                                ]
                             }
-                        ]
-                    }
-                    return MockResponse(gemini_compatible_json, 200)
-                else:
-                    resp_text = await resp.text()
-                    print(f"❌ [Gemini Client] Groq request failed with code {resp.status}: {resp_text}")
+                            return MockResponse(gemini_compatible_json, 200)
+                        else:
+                            resp_text = await resp.text()
+                            print(f"⚠️ [Gemini Client] Groq model {groq_model} failed ({resp.status}): {resp_text[:150]}")
+                except Exception as ge:
+                    print(f"⚠️ [Gemini Client] Exception with Groq model {groq_model}: {ge}")
         else:
             print("❌ [Gemini Client] No Groq API Key found.")
     except Exception as e:
@@ -200,8 +206,8 @@ async def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries
                 if k and not k.startswith("AQ.") and k not in KNOWN_INVALID_KEYS and k not in api_keys:
                     api_keys.append(k)
             
-    # List of valid active model names on the API
-    models = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-pro"]
+    # List of valid active model names on the API (gemini-3.6-flash is primary)
+    models = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-pro", "gemini-2.5-flash"]
     
     # Identify the current model in the url
     current_model = "gemini-2.5-flash"

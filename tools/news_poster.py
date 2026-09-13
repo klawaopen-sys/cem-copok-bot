@@ -57,14 +57,32 @@ async def send_channel_post_via_bot(bot_token, channel_target, text, photo_path=
     msg = None
     try:
         if photo_path and os.path.exists(photo_path):
-            caption_text, parse_mode = limit_caption_text(text, 1024)
-            msg = await bot.send_photo(
-                chat_id=channel_target,
-                photo=FSInputFile(photo_path),
-                caption=caption_text,
-                parse_mode=parse_mode,
-                reply_markup=reply_markup
-            )
+            if len(text) <= 1024:
+                msg = await bot.send_photo(
+                    chat_id=channel_target,
+                    photo=FSInputFile(photo_path),
+                    caption=text,
+                    parse_mode='HTML',
+                    reply_markup=reply_markup
+                )
+            else:
+                # Caption exceeds 1024 characters: send photo with clean first part, then send full/continuation text
+                msg = await bot.send_photo(
+                    chat_id=channel_target,
+                    photo=FSInputFile(photo_path),
+                    caption=text[:1000] + "...",
+                    parse_mode='HTML'
+                )
+                await asyncio.sleep(1.5)
+                # Send complete full text or remaining continuation so content is never lost or truncated
+                msg_cont = await bot.send_message(
+                    chat_id=channel_target,
+                    text=f"📌 <b>Продовження публікації:</b>\n\n{text}",
+                    parse_mode='HTML',
+                    reply_markup=reply_markup
+                )
+                msg = msg_cont
+
             try: os.remove(photo_path)
             except Exception: pass
         else:
