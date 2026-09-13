@@ -207,7 +207,7 @@ async def gemini_post_with_retry(url, headers, json_payload, timeout=30, retries
                     api_keys.append(k)
             
     # List of valid active model names on the API (gemini-3.6-flash is primary)
-    models = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-pro", "gemini-2.5-flash"]
+    models = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.0-flash"]
     
     # Identify the current model in the url
     current_model = "gemini-2.5-flash"
